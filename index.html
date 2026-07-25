@@ -3,44 +3,146 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#0d0f13">
+<meta name="theme-color" content="#0A0C10">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" type="image/png" href="./favicon.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <title>MedieStudio</title>
+<link rel="stylesheet" href="ds.css">
 <style>
-:root{
-  --bg:#0d0f13; --panel:#151821; --panel2:#1b1f2b; --panel3:#232838;
-  --line:#2a3040; --txt:#e8ecf4; --dim:#8b93a7; --faint:#586074;
-  --acc:#4f8cff; --acc2:#7fb0ff; --warn:#ffb14f; --err:#ff5f56; --ok:#4fd08a;
-  --clip:#2d4a7a; --clipsel:#4f8cff; --text-blk:#7a5a2d; --sub-blk:#2d7a5a;
-  --r:8px; --shadow:0 8px 28px rgba(0,0,0,.5);
+/* ═══════════════════════════════════════════════════════════════════════
+   MedieStudio — flade-lag oven på GITATO Design System v2.
+   ds.css leverer substrat, blæk, kanter, radier, typografi, bevægelse og
+   fokus-ring. Herunder står kun det der reelt er unikt for en tæt
+   redigerings-UI: panel-geometri, tidslinje og de tre spor-farver.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Aliaser: fladens gamle variabelnavne peger nu på DS-tokens, så al
+   eksisterende markup og alle JS-skabeloner (fx var(--err) i en
+   template-streng) følger med uden at blive rørt.
+   Blokken sidder på <body> og ikke på :root, fordi temaets --gt-sig /
+   --gt-sig-2 sættes af data-gt="mediestudio" netop dér — en :root-alias
+   ville låse sig fast på systemets standardsignal i stedet. */
+body{
+  --bg:var(--gt-sub-0);
+  --panel:var(--gt-pl-1);
+  --panel2:var(--gt-pl-2);
+  --panel3:var(--gt-pl-3);
+  --line:var(--gt-edge-hair);
+  --txt:var(--gt-ink-1);
+  --dim:var(--gt-ink-2);
+  --faint:var(--gt-ink-3);        /* ink-4 er aldrig tekst — SPEC regel 2 */
+  --acc:var(--gt-sig);
+  --acc2:var(--gt-sig-ink);
+  --warn:var(--gt-warn);
+  --ok:var(--gt-ok);
+  --err:var(--gt-danger-ink);     /* bruges som tekst OG kant → ink-varianten */
+  --err-fill:var(--gt-danger);    /* rene fyld: playhead                     */
+  --clipsel:var(--gt-sig);
+  --r:var(--gt-r-3);
+  --shadow:var(--gt-e-3);
+
+  /* Tidslinjens tre spor. Reelt fladespecifikt: tre mørke plader der skal
+     kunne bære en 10px etiket oven på en vilkårlig thumbnail-stribe.
+     Hver er 60/40 af sin signal-bezel og substratet; alle tre måler over
+     7:1 mod --gt-ink-1. Sporene er desuden adskilt lodret og navngivet
+     med ikon + tekst, så farve aldrig er eneste kanal (SPEC regel 3). */
+  --clip:#0A505F;      /* cyan-dk  × sub-0 — video      */
+  --text-blk:#5D330F;  /* amber-dk × sub-0 — tekst      */
+  --sub-blk:#135134;   /* green-dk × sub-0 — undertekst */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
+/* MedieStudio er en tre-panels desktop-editor: #main er et grid på
+   270px + 1fr + 318px, så skallen kan ikke blive smallere end ~700px uden en
+   egentlig responsiv ombygning — det er en større opgave end en grafisk overhaul.
+   Indtil da: lad hele layoutet panorere på smalle skærme i stedet for at klippe
+   den højre tredjedel bort, som filen gjorde før (den havde ingen media queries
+   overhovedet). Video redigeres ikke på en 375px-telefon, men UI'et skal kunne nås.
+   980px og ikke 760px: ved 760px bliver midterkolonnen kun 172px, og så flyder
+   transportrækken (#tcur/#ttot/#volWrap) ud over sin kolonne og forsvinder ind
+   under inspektørens uigennemsigtige plade. Transportrækken måler 377px, så
+   270 + 377 + 318 = 965 er gulvet; 980 giver lidt luft. */
+@media (max-width: 980px){
+  html{overflow-x:auto}
+  body{min-width:980px}
+}
 body{
   background:var(--bg);color:var(--txt);
-  font:13px/1.45 'Segoe UI',system-ui,-apple-system,sans-serif;
+  font:400 13px/1.5 var(--gt-font-body);
   display:grid;grid-template-rows:46px 1fr 270px 24px;
   user-select:none;-webkit-user-select:none;
 }
 input,select,textarea,button{font:inherit;color:inherit}
+/* Klik skal altid ramme knappen — flere handlere tester e.target.classList
+   (fx .addBtn), og et <svg>/<use> ville ellers stå i vejen. */
+.gi{pointer-events:none}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:#2c3244;border-radius:6px;border:2px solid var(--panel)}
-::-webkit-scrollbar-thumb:hover{background:#3a4257}
+::-webkit-scrollbar-thumb{background:var(--gt-edge-hair);border-radius:var(--gt-r-3);border:2px solid var(--panel)}
+::-webkit-scrollbar-thumb:hover{background:var(--gt-edge-bezel)}
+
+/* ---------- Fælles knap-base ----------
+   .tbtn .pbtn .sbtn .preset .chip havde før hver sin padding, radius, kant
+   og hover-regel uden noget til fælles. De deler nu én maskineret
+   plade-base fra DS'et, og kun det der faktisk adskiller dem står i deres
+   egne regler nedenfor. Klassenavnene er uændrede — JS binder til flere
+   af dem (querySelectorAll('.chip'), el('button','sbtn',…), …). */
+.tbtn,.pbtn,.sbtn,.preset,.chip{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  font-family:var(--gt-font-ui);font-weight:600;color:var(--txt);
+  background:linear-gradient(180deg,var(--gt-pl-2),var(--gt-pl-1));
+  border:1px solid var(--line);
+  border-radius:var(--gt-r-2);
+  box-shadow:var(--gt-e-1);
+  cursor:pointer;white-space:nowrap;
+  transition:background var(--gt-d-2) var(--gt-ease-soft),
+             border-color var(--gt-d-2) var(--gt-ease-soft),
+             color var(--gt-d-2) var(--gt-ease-soft);
+}
+.tbtn:hover,.pbtn:hover,.sbtn:hover,.preset:hover,.chip:hover{
+  background:linear-gradient(180deg,var(--gt-pl-3),var(--gt-pl-2));
+  border-color:var(--gt-sig);
+}
+.tbtn:active,.pbtn:active,.sbtn:active,.preset:active,.chip:active{background:var(--gt-pl-4)}
+.tbtn:disabled,.sbtn:disabled{
+  opacity:.45;cursor:default;border-color:var(--line);
+  background:var(--gt-pl-1);box-shadow:var(--gt-e-0);
+}
+.tbtn:disabled:hover,.sbtn:disabled:hover{border-color:var(--line)}
 
 /* ---------- Toolbar ---------- */
-#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line)}
-#logo{font-weight:700;font-size:15px;letter-spacing:.4px;color:var(--acc2);white-space:nowrap}
-#logo span{color:var(--txt);font-weight:400}
-#projName{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;width:190px;outline:none}
+/* Værktøjslinjen er ~1000px kontroller. På en smal skærm blev den før klippet
+   af — alt uden for vinduets kant var simpelthen uden for rækkevidde, fordi
+   filen aldrig har haft en media query. Lad den scrolle i stedet. Det er
+   stadig en desktop-editor; det her forhindrer bare at den fjerne ende forsvinder. */
+#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+/* :not(.grow) — ellers ville #toolbar > * (specificitet 1,0,0) slå .grow{flex:1}
+   (0,1,0) ihjel, og hele højregruppen (netBadge · Still · Eksportér) ville
+   klumpe sig sammen i midten i stedet for at stå højrestillet. */
+#toolbar > :not(.grow){flex:none}
+#logo{font-family:var(--gt-font-ui);font-weight:700;font-size:15px;letter-spacing:.05em;color:var(--acc2);white-space:nowrap}
+#logo span{color:var(--txt);font-weight:500}
+#projName{
+  font-family:var(--gt-font-body);
+  background:var(--gt-void);border:1px solid var(--line);
+  border-radius:var(--gt-r-2);padding:4px 10px;width:190px;outline:none;
+  box-shadow:inset 0 1px 3px rgba(0,0,0,.7);
+}
 #projName:focus{border-color:var(--acc)}
-.tbtn{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
-.tbtn:hover{background:var(--panel3);border-color:#3a4257}
-.tbtn.acc{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
-.tbtn.acc:hover{background:#659aff}
-.tbtn:disabled{opacity:.4;cursor:default}
+.tbtn{padding:5px 11px;font-size:12.5px;letter-spacing:.01em}
+/* Oplyst plade: mørk stenciltekst på signalfarven — hvid ville måle 1.60:1 */
+.tbtn.acc{
+  background:var(--gt-sig);border-color:var(--gt-sig-dk);
+  color:var(--gt-ink-on-lit);font-weight:700;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),
+             inset 0 -1px 0 rgba(0,0,0,.30),
+             0 0 0 1px var(--gt-sig-dk),
+             var(--gt-bloom-sm);
+  transition:filter var(--gt-d-2) var(--gt-ease-out);
+}
+.tbtn.acc:hover{background:var(--gt-sig);border-color:var(--gt-sig-dk);filter:brightness(1.13) saturate(1.04)}
 .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
 .grow{flex:1}
 
@@ -49,73 +151,87 @@ input,select,textarea,button{font:inherit;color:inherit}
 
 /* ---------- Bin ---------- */
 #bin{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
-.panelHead{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
-.chip{background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:2px 10px;font-size:11px;cursor:pointer;color:var(--dim);text-transform:none;letter-spacing:0;font-weight:400}
-.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.panelHead{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-family:var(--gt-font-ui);font-weight:700;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:var(--gt-track-label)}
+.chip{border-radius:var(--gt-r-1);padding:2px 10px;font-size:11px;color:var(--dim);text-transform:none;letter-spacing:0;font-weight:500}
+/* Aktiv chip: oplyst plade + tungere vægt, så tilstanden også bæres af
+   noget andet end farve (SPEC regel 3). */
+.chip.on{background:var(--gt-sig);border-color:var(--gt-sig-dk);color:var(--gt-ink-on-lit);font-weight:700}
+.chip.on:hover{background:var(--gt-sig);border-color:var(--gt-sig-dk);filter:brightness(1.13)}
 #binGrid{flex:1;overflow-y:auto;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
-.mcard{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;position:relative}
-.mcard:hover{border-color:#3a4257}
-.mcard.sel{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.mcard{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;position:relative;box-shadow:var(--gt-e-1);transition:border-color var(--gt-d-2) var(--gt-ease-soft),box-shadow var(--gt-d-2) var(--gt-ease-soft)}
+.mcard:hover{border-color:var(--gt-sig)}
+.mcard.sel{border-color:var(--gt-sig);box-shadow:0 0 0 1px var(--gt-sig),var(--gt-bloom-sm)}
 .mcard .th{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:#000}
 .mcard .nm{padding:4px 6px;font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mcard .dur{position:absolute;top:5px;right:5px;background:rgba(0,0,0,.72);border-radius:4px;padding:1px 5px;font-size:10px}
-.mcard .typ{position:absolute;top:5px;left:5px;background:rgba(0,0,0,.72);border-radius:4px;padding:1px 5px;font-size:10px;color:var(--acc2)}
-.mcard .bad{position:absolute;inset:0;background:rgba(20,10,10,.7);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--err);text-align:center;padding:4px}
-.mcard .addBtn{position:absolute;bottom:26px;right:5px;background:var(--acc);color:#fff;border:none;border-radius:5px;width:22px;height:22px;cursor:pointer;display:none;font-size:15px;line-height:1}
-.mcard:hover .addBtn{display:block}
-#binEmpty{padding:26px 16px;color:var(--faint);text-align:center;grid-column:1/-1}
-#binEmpty .big{font-size:30px;margin-bottom:10px}
+.mcard .dur{position:absolute;top:5px;right:5px;background:rgba(0,0,0,.72);border-radius:var(--gt-r-1);padding:1px 5px;font-size:10px;font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1}
+.mcard .typ{position:absolute;top:5px;left:5px;background:rgba(0,0,0,.72);border-radius:var(--gt-r-1);padding:2px 5px;font-size:10px;color:var(--acc2);display:inline-flex;align-items:center}
+.mcard .bad{position:absolute;inset:0;background:rgba(20,10,10,.7);display:flex;align-items:center;justify-content:center;gap:5px;font-size:10px;color:var(--err);text-align:center;padding:4px}
+.mcard .addBtn{position:absolute;bottom:26px;right:5px;background:var(--gt-sig);color:var(--gt-ink-on-lit);border:1px solid var(--gt-sig-dk);border-radius:var(--gt-r-1);width:22px;height:22px;cursor:pointer;display:none;font-size:12px;line-height:1;align-items:center;justify-content:center}
+.mcard:hover .addBtn,.mcard:focus-within .addBtn{display:inline-flex}
+#binEmpty{padding:26px 16px;color:var(--faint);text-align:center;grid-column:1/-1;line-height:1.6}
+/* Inaktiv glyf — ink-4 må gerne bruges her, men aldrig til tekst. */
+#binEmpty .big{font-size:30px;margin-bottom:10px;color:var(--gt-ink-4)}
 #binFoot{padding:6px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
 
 /* ---------- Preview ---------- */
-#previewWrap{display:flex;flex-direction:column;min-width:0;min-height:0;background:#07080b}
+#previewWrap{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--gt-void)}
 #stage{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;overflow:hidden}
-#cv{max-width:calc(100% - 24px);max-height:calc(100% - 16px);background:#000;box-shadow:var(--shadow);border-radius:3px}
+#cv{max-width:calc(100% - 24px);max-height:calc(100% - 16px);background:#000;box-shadow:var(--shadow);border-radius:var(--gt-r-2)}
 #stageHint{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;color:var(--faint);pointer-events:none;text-align:center}
-#stageHint .big{font-size:42px}
+#stageHint .big{font-size:42px;color:var(--gt-ink-4)}
 #transport{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-top:1px solid var(--line)}
-.pbtn{background:transparent;border:1px solid transparent;border-radius:6px;color:var(--txt);width:32px;height:28px;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center}
-.pbtn:hover{background:var(--panel3)}
-.pbtn.main{background:var(--panel3);border-color:var(--line);width:44px}
-#tcur{font-variant-numeric:tabular-nums;color:var(--acc2);font-weight:600}
-#ttot{font-variant-numeric:tabular-nums;color:var(--faint)}
+.pbtn{background:transparent;border-color:transparent;box-shadow:none;color:var(--txt);width:32px;height:28px;padding:0;font-size:14px}
+.pbtn:hover{background:var(--panel3);border-color:var(--line)}
+.pbtn.main{background:linear-gradient(180deg,var(--gt-pl-3),var(--gt-pl-2));border-color:var(--gt-edge-bezel);box-shadow:var(--gt-e-1);width:44px}
+#tcur{font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;color:var(--acc2);font-weight:700}
+#ttot{font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;color:var(--faint)}
 #volWrap{display:flex;align-items:center;gap:5px;color:var(--dim)}
-input[type=range]{-webkit-appearance:none;height:4px;border-radius:2px;background:#2c3244;outline:none;cursor:pointer}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);border:2px solid #0d0f13}
+input[type=range]{-webkit-appearance:none;height:4px;border-radius:var(--gt-r-1);background:var(--gt-edge-hair);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);border:2px solid var(--gt-sub-0)}
 
 /* ---------- Inspector ---------- */
 #insp{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #inspBody{flex:1;overflow-y:auto;padding:10px 12px 30px}
 .sec{margin-bottom:14px}
-.sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between}
-.sec h3 .mini{font-size:10px;color:var(--acc2);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:400}
+.sec h3{font-family:var(--gt-font-ui);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:var(--gt-track-label);color:var(--dim);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between}
+.sec h3 .mini{font-size:10px;color:var(--acc2);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;padding:1px 4px;border-radius:var(--gt-r-1)}
 .sec h3 .mini:hover{text-decoration:underline}
 .row{display:flex;align-items:center;gap:8px;margin-bottom:7px}
 .row label{width:86px;flex:none;color:var(--dim);font-size:12px}
 .row input[type=range]{flex:1}
-.row .val{width:44px;flex:none;text-align:right;font-size:11px;color:var(--acc2);font-variant-numeric:tabular-nums}
-.row input[type=number],.row input[type=text],.row select{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:4px 7px;outline:none;min-width:0}
+.row .val{width:44px;flex:none;text-align:right;font-size:11px;color:var(--acc2);font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+/* Nedsænket, ikke hævet — et felt må ikke ligne en knap (SPEC §E) */
+.row input[type=number],.row input[type=text],.row select{flex:1;background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:4px 7px;outline:none;min-width:0;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .row input:focus,.row select:focus,textarea:focus{border-color:var(--acc)}
-.row input[type=color]{width:34px;height:26px;border:1px solid var(--line);border-radius:5px;background:var(--panel2);padding:1px;cursor:pointer;flex:none}
+.row input[type=color]{width:34px;height:26px;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--panel2);padding:1px;cursor:pointer;flex:none}
 .row input[type=checkbox]{accent-color:var(--acc);width:15px;height:15px;cursor:pointer}
-textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px;outline:none;resize:vertical;min-height:56px;user-select:text;-webkit-user-select:text}
+textarea{width:100%;font-family:var(--gt-font-body);background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:6px 8px;outline:none;resize:vertical;min-height:56px;user-select:text;-webkit-user-select:text;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 .presets{display:flex;flex-wrap:wrap;gap:5px}
-.preset{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;color:var(--dim)}
-.preset:hover{border-color:var(--acc);color:var(--txt)}
+.preset{padding:3px 9px;font-size:11px;color:var(--dim);font-weight:500}
+.preset:hover{color:var(--txt)}
 .grid9{display:grid;grid-template-columns:repeat(3,26px);gap:3px}
-.grid9 button{width:26px;height:22px;background:var(--panel2);border:1px solid var(--line);border-radius:4px;cursor:pointer;font-size:9px;color:var(--dim)}
-.grid9 button:hover{border-color:var(--acc)}
+.grid9 button{width:26px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--gt-pl-2),var(--gt-pl-1));border:1px solid var(--line);border-radius:var(--gt-r-1);cursor:pointer;font-size:9px;color:var(--dim);box-shadow:var(--gt-e-1)}
+.grid9 button:hover{border-color:var(--gt-sig);color:var(--txt)}
 #inspEmpty{color:var(--faint);text-align:center;padding:30px 14px}
-.subList{max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel2)}
+.subList{max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--gt-sub-1)}
 .subItem{padding:5px 8px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:8px;font-size:11.5px}
 .subItem:last-child{border-bottom:none}
 .subItem:hover{background:var(--panel3)}
-.subItem.on{background:#25355a}
-.subItem .st{color:var(--acc2);font-variant-numeric:tabular-nums;flex:none}
+/* Valgt: plade + kantbånd til venstre, så farve ikke står alene */
+.subItem.on{background:var(--gt-pl-3);box-shadow:inset 3px 0 0 var(--gt-sig)}
+.subItem .st{color:var(--acc2);font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;flex:none}
 .subItem .tx{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--dim)}
 .btnRow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}
-.sbtn{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
-.sbtn:hover{border-color:var(--acc)}
+.sbtn{padding:4px 10px;font-size:12px}
+.sbtn.acc{
+  background:var(--gt-sig);border-color:var(--gt-sig-dk);
+  color:var(--gt-ink-on-lit);font-weight:700;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),
+             inset 0 -1px 0 rgba(0,0,0,.30),
+             0 0 0 1px var(--gt-sig-dk),
+             var(--gt-bloom-sm);
+}
+.sbtn.acc:hover{background:var(--gt-sig);border-color:var(--gt-sig-dk);filter:brightness(1.13) saturate(1.04)}
 .sbtn.danger:hover{border-color:var(--err);color:var(--err)}
 
 /* ---------- Timeline ---------- */
@@ -123,73 +239,114 @@ textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border
 #tlTools{display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line)}
 #tlTools .tbtn{padding:3px 9px;font-size:12px}
 #tlZoom{width:110px}
-#tlBody{display:grid;grid-template-columns:74px 1fr;min-height:0}
-#tlLabels{border-right:1px solid var(--line);display:flex;flex-direction:column;font-size:10px;color:var(--faint);background:var(--panel)}
-#tlLabels div{display:flex;align-items:center;padding:0 8px;border-bottom:1px solid #1e2330}
+/* 74px → 84px: sporetiketterne bærer nu ikon + tekst i stedet for emoji + tekst.
+   Alt i tidslinjen måles ud fra #tlScroll.clientWidth, så bredden er fri. */
+#tlBody{display:grid;grid-template-columns:84px 1fr;min-height:0}
+#tlLabels{border-right:1px solid var(--line);display:flex;flex-direction:column;font-family:var(--gt-font-ui);font-size:10px;color:var(--faint);background:var(--panel)}
+#tlLabels div{display:flex;align-items:center;gap:4px;padding:0 7px;border-bottom:1px solid var(--line)}
 #tlScroll{overflow-x:auto;overflow-y:hidden;position:relative;background:var(--bg)}
 #tlInner{position:relative;height:100%;min-width:100%}
 #ruler{position:absolute;top:0;left:0;height:26px;cursor:pointer}
-.track{position:absolute;left:0;right:0;border-bottom:1px solid #1e2330}
+.track{position:absolute;left:0;right:0;border-bottom:1px solid var(--line)}
 #trClips{top:26px;height:86px}
 #trTexts{top:112px;height:46px}
 #trSubs{top:158px;height:46px}
-.blk{position:absolute;top:4px;bottom:4px;border-radius:6px;overflow:hidden;cursor:grab;border:1px solid rgba(255,255,255,.14)}
+.blk{position:absolute;top:4px;bottom:4px;border-radius:var(--gt-r-2);overflow:hidden;cursor:grab;border:1px solid var(--gt-lip)}
 .blk:active{cursor:grabbing}
-.blk.sel{outline:2px solid var(--acc);outline-offset:0}
+.blk.sel{outline:2px solid var(--gt-sig);outline-offset:0}
 .blk .lbl{position:absolute;left:6px;bottom:3px;right:6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px #000;pointer-events:none}
-.blk .dtag{position:absolute;right:4px;top:2px;font-size:9px;background:rgba(0,0,0,.55);padding:0 4px;border-radius:3px;pointer-events:none}
+.blk .dtag{position:absolute;right:4px;top:2px;font-size:9px;font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1;background:rgba(0,0,0,.55);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
 .blk.clip{background:var(--clip)}
-.blk.clip .fxdot{position:absolute;left:5px;top:3px;font-size:9px;background:rgba(0,0,0,.55);color:var(--warn);padding:0 4px;border-radius:3px;pointer-events:none}
+.blk.clip .fxdot{position:absolute;left:5px;top:3px;font-size:9px;display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.55);color:var(--gt-warn-ink);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
 .blk.txt{background:var(--text-blk)}
 .blk.sub{background:var(--sub-blk)}
 .hnd{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:3}
-.hnd.l{left:0;border-radius:6px 0 0 6px}
-.hnd.r{right:0;border-radius:0 6px 6px 0}
+.hnd.l{left:0;border-radius:var(--gt-r-2) 0 0 var(--gt-r-2)}
+.hnd.r{right:0;border-radius:0 var(--gt-r-2) var(--gt-r-2) 0}
 .blk:hover .hnd{background:rgba(255,255,255,.22)}
-#playhead{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--err);z-index:8;pointer-events:none}
-#playhead::before{content:'';position:absolute;top:0;left:-7px;border:6px solid transparent;border-top:8px solid var(--err)}
+#playhead{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--err-fill);z-index:8;pointer-events:none}
+#playhead::before{content:'';position:absolute;top:0;left:-7px;border:6px solid transparent;border-top:8px solid var(--err-fill)}
 #tlEmpty{position:absolute;top:38px;left:0;right:0;text-align:center;color:var(--faint);pointer-events:none;font-size:12px}
 .ghostLine{position:absolute;top:26px;bottom:0;width:0;border-left:2px dashed var(--warn);z-index:7;pointer-events:none;display:none}
 
 /* ---------- Statusbar ---------- */
 #status{display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden}
 #status b{color:var(--dim);font-weight:600}
-kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:10px;font-family:inherit}
+kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2px;border-radius:var(--gt-r-1);padding:0 5px;font-size:10px;font-family:var(--gt-font-mono)}
 
 /* ---------- Modal / progress / toast ---------- */
 #modalBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:60}
 #modalBack.open{display:flex}
-.modal{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);width:430px;max-width:92vw;padding:18px 20px}
-.modal h2{font-size:15px;margin-bottom:14px}
+.modal{background:linear-gradient(180deg,var(--gt-pl-1),var(--gt-sub-1));border:1px solid var(--gt-edge-bezel);border-radius:var(--gt-r-4);box-shadow:var(--gt-e-4);width:430px;max-width:92vw;padding:18px 20px}
+.modal h2{font-family:var(--gt-font-ui);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:var(--gt-track-head);margin-bottom:14px}
 .modal .row label{width:110px}
 #expProg{display:none}
-#progBar{height:8px;background:var(--panel3);border-radius:4px;overflow:hidden;margin:8px 0 4px}
-#progFill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .15s}
+#progBar{height:8px;background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-1);overflow:hidden;margin:8px 0 4px;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+#progFill{height:100%;width:0%;background:linear-gradient(90deg,var(--gt-sig-dk),var(--gt-sig));transition:width .15s var(--gt-ease-soft)}
 #progTxt{font-size:11px;color:var(--dim)}
 #toasts{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;align-items:center}
-.toast{background:var(--panel3);border:1px solid var(--line);border-radius:8px;padding:7px 16px;box-shadow:var(--shadow);font-size:12.5px;animation:tin .18s ease}
-.toast.err{border-color:var(--err);color:#ffb3ae}
+.toast{background:linear-gradient(180deg,var(--gt-pl-3),var(--gt-pl-2));border:1px solid var(--gt-edge-bezel);border-radius:var(--gt-r-3);padding:7px 16px;box-shadow:var(--gt-e-3);font-size:12.5px;animation:tin var(--gt-d-3) var(--gt-ease-out)}
+.toast.err{border-color:var(--err);color:var(--err)}
 .toast.ok{border-color:var(--ok)}
 @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-#dropOverlay{position:fixed;inset:0;background:rgba(79,140,255,.12);border:3px dashed var(--acc);z-index:70;display:none;align-items:center;justify-content:center;font-size:20px;color:var(--acc2);pointer-events:none}
+#dropOverlay{position:fixed;inset:0;background:rgba(25,224,255,.10);border:3px dashed var(--gt-sig);z-index:70;display:none;align-items:center;justify-content:center;font-family:var(--gt-font-ui);font-size:20px;letter-spacing:var(--gt-track-head);color:var(--acc2);pointer-events:none}
+
+/* ---------- Fokus ----------
+   Før fandtes fokus kun på tekstfelter, og fire regler slog outline fra
+   uden at give noget igen. Nu har alt klikbart DS'ets to-tonede ring, og
+   den står sidst i filen så den vinder over fx .mcard.sel og .subItem.on,
+   der selv sætter box-shadow. */
+button:focus-visible,
+[role="button"]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible,
+/* Gentagelserne herunder er ikke pynt: de matcher specificiteten på de
+   regler der selv sætter box-shadow (#projName, .row input[type=…],
+   .pbtn.main, .mcard.sel, .subItem.on), så ringen vinder. */
+.tbtn:focus-visible,.pbtn:focus-visible,.sbtn:focus-visible,
+.preset:focus-visible,.chip:focus-visible,
+.mcard:focus-visible,.subItem:focus-visible,
+.row input:focus-visible,.row select:focus-visible,
+#projName:focus-visible,#tlZoom:focus-visible,#masterVol:focus-visible{
+  outline:none;
+  box-shadow:var(--gt-focus-ring);
+}
+/* De oplyste plader sætter selv box-shadow (bloom + bezel) med højere
+   specificitet; ringen skal vinde over den. Den beholder DS'ets normale
+   retning: ringen tegnes UDEN FOR knappen, altså på den mørke plade — så
+   den mørke inderkant adskiller den fra signalfyldet, og den hvide
+   yderkant står mod substratet. */
+.tbtn.acc:focus-visible,.sbtn.acc:focus-visible,
+.chip.on:focus-visible,.mcard .addBtn:focus-visible{
+  box-shadow:var(--gt-focus-ring);
+}
+/* Statiske spans der opfører sig som knapper får også en synlig ramme. */
+[role="button"]{cursor:pointer}
+
+@media (prefers-reduced-motion:reduce){
+  .toast{animation:none}
+  .tbtn.acc:hover,.sbtn.acc:hover,.chip.on:hover{filter:none}
+}
 </style>
 </head>
-<body>
+<body data-gt="mediestudio">
 
 <div id="toolbar">
   <div id="logo">Medie<span>Studio</span></div>
   <div class="sep"></div>
-  <button class="tbtn" id="btnOpenDir" title="Indlæs mediemappen">📁 Åbn mappe</button>
-  <button class="tbtn" id="btnReopenDir" title="Genåbn den senest brugte mediemappe" style="display:none">↻ Genåbn seneste mappe</button>
-  <button class="tbtn" id="btnAddFiles" title="Tilføj enkelte filer">＋ Filer</button>
+  <button class="tbtn" id="btnOpenDir" title="Indlæs mediemappen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-folder-open"></use></svg> Åbn mappe</button>
+  <button class="tbtn" id="btnReopenDir" title="Genåbn den senest brugte mediemappe" style="display:none"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-refresh"></use></svg> Genåbn seneste mappe</button>
+  <button class="tbtn" id="btnAddFiles" title="Tilføj enkelte filer"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-file-plus"></use></svg> Filer</button>
   <div class="sep"></div>
-  <input id="projName" value="Mit projekt" spellcheck="false" title="Projektnavn">
-  <button class="tbtn" id="btnSaveProj" title="Gem projekt som .json (Ctrl+S)">💾 Gem</button>
-  <button class="tbtn" id="btnLoadProj" title="Indlæs projekt-fil">📂 Indlæs</button>
+  <input id="projName" value="Mit projekt" spellcheck="false" title="Projektnavn" aria-label="Projektnavn">
+  <button class="tbtn" id="btnSaveProj" title="Gem projekt som .json (Ctrl+S)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-save"></use></svg> Gem</button>
+  <button class="tbtn" id="btnLoadProj" title="Indlæs projekt-fil"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-upload"></use></svg> Indlæs</button>
   <div class="grow"></div>
   <span id="netBadge" style="font-size:11px;color:var(--faint)"></span>
-  <button class="tbtn" id="btnStill" title="Gem nuværende billede som PNG">📸 Still</button>
-  <button class="tbtn acc" id="btnExport">⬇ Eksportér video</button>
+  <button class="tbtn" id="btnStill" title="Gem nuværende billede som PNG"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-camera"></use></svg> Still</button>
+  <button class="tbtn acc" id="btnExport"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-download"></use></svg> Eksportér video</button>
 </div>
 
 <div id="main">
@@ -198,14 +355,14 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
     <div class="panelHead">
       Medier
       <span class="grow"></span>
-      <span class="chip on" data-f="all">Alle</span>
-      <span class="chip" data-f="video">Video</span>
-      <span class="chip" data-f="image">Foto</span>
+      <span class="chip on" data-f="all" role="button" tabindex="0">Alle</span>
+      <span class="chip" data-f="video" role="button" tabindex="0">Video</span>
+      <span class="chip" data-f="image" role="button" tabindex="0">Foto</span>
     </div>
     <div id="binGrid">
       <div id="binEmpty">
-        <div class="big">🎬</div>
-        Klik på <b>📁 Åbn mappe</b> og vælg din Camera-mappe.<br><br>
+        <div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg></div>
+        Klik på <b><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-folder-open"></use></svg> Åbn mappe</b> og vælg din Camera-mappe.<br><br>
         Du kan også trække filer direkte herind.
       </div>
     </div>
@@ -216,20 +373,20 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
     <div id="stage">
       <canvas id="cv" width="1080" height="1920"></canvas>
       <div id="stageHint">
-        <div class="big">▶</div>
+        <div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-play"></use></svg></div>
         <div>Dobbeltklik på et medie for at lægge det på tidslinjen</div>
       </div>
     </div>
     <div id="transport">
-      <button class="pbtn" id="btnHome" title="Til start (Home)">⏮</button>
-      <button class="pbtn" id="btnPrevF" title="1 billede tilbage (←)">◂❚</button>
-      <button class="pbtn main" id="btnPlay" title="Afspil/pause (Mellemrum)">▶</button>
-      <button class="pbtn" id="btnNextF" title="1 billede frem (→)">❚▸</button>
-      <button class="pbtn" id="btnEnd" title="Til slut (End)">⏭</button>
+      <button class="pbtn" id="btnHome" title="Til start (Home)" aria-label="Til start"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-skip-back"></use></svg></button>
+      <button class="pbtn" id="btnPrevF" title="1 billede tilbage (←)" aria-label="1 billede tilbage"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-step-back"></use></svg></button>
+      <button class="pbtn main" id="btnPlay" title="Afspil/pause (Mellemrum)" aria-label="Afspil eller pause"><svg class="gi" aria-hidden="true"><use id="btnPlayIcon" href="icons.svg#gi-play"></use></svg></button>
+      <button class="pbtn" id="btnNextF" title="1 billede frem (→)" aria-label="1 billede frem"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-step-fwd"></use></svg></button>
+      <button class="pbtn" id="btnEnd" title="Til slut (End)" aria-label="Til slut"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-skip-fwd"></use></svg></button>
       <div class="sep"></div>
       <span id="tcur">00:00.00</span>&nbsp;<span id="ttot">/ 00:00.00</span>
       <div class="grow"></div>
-      <div id="volWrap">🔊 <input type="range" id="masterVol" min="0" max="1" step="0.01" value="1" style="width:80px"></div>
+      <div id="volWrap"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-speaker"></use></svg> <input type="range" id="masterVol" min="0" max="1" step="0.01" value="1" style="width:80px" title="Hovedlydstyrke" aria-label="Hovedlydstyrke"></div>
     </div>
   </div>
 
@@ -242,27 +399,27 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
 
 <div id="tl">
   <div id="tlTools">
-    <button class="tbtn" id="btnSplit" title="Del klip ved playhead (S)">✂ Split</button>
-    <button class="tbtn" id="btnDel" title="Slet valgte (Delete)">🗑 Slet</button>
-    <button class="tbtn" id="btnDup" title="Duplikér valgte (Ctrl+D)">⧉ Duplikér</button>
+    <button class="tbtn" id="btnSplit" title="Del klip ved playhead (S)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-scissors"></use></svg> Split</button>
+    <button class="tbtn" id="btnDel" title="Slet valgte (Delete)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-trash"></use></svg> Slet</button>
+    <button class="tbtn" id="btnDup" title="Duplikér valgte (Ctrl+D)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-duplicate"></use></svg> Duplikér</button>
     <div class="sep"></div>
-    <button class="tbtn" id="btnAddText" title="Ny tekst ved playhead (T)">🔤 Tekst</button>
-    <button class="tbtn" id="btnAddSub" title="Ny undertekst ved playhead (U)">💬 Undertekst</button>
+    <button class="tbtn" id="btnAddText" title="Ny tekst ved playhead (T)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</button>
+    <button class="tbtn" id="btnAddSub" title="Ny undertekst ved playhead (U)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</button>
     <div class="sep"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);cursor:pointer">
       <input type="checkbox" id="snapChk" checked style="accent-color:var(--acc)"> Snap
     </label>
     <div class="grow"></div>
     <span style="font-size:11px;color:var(--faint)">Zoom</span>
-    <input type="range" id="tlZoom" min="8" max="400" step="1" value="60">
-    <button class="tbtn" id="btnFit" title="Tilpas hele tidslinjen">⤢ Fit</button>
+    <input type="range" id="tlZoom" min="8" max="400" step="1" value="60" title="Zoom på tidslinjen" aria-label="Zoom på tidslinjen">
+    <button class="tbtn" id="btnFit" title="Tilpas hele tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-fit"></use></svg> Fit</button>
   </div>
   <div id="tlBody">
     <div id="tlLabels">
       <div style="height:26px"></div>
-      <div style="height:86px">🎞 Video</div>
-      <div style="height:46px">🔤 Tekst</div>
-      <div style="height:46px">💬 Undertekst</div>
+      <div style="height:86px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg> Video</div>
+      <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</div>
+      <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</div>
     </div>
     <div id="tlScroll">
       <div id="tlInner">
@@ -307,7 +464,7 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
     </div>
     <div class="btnRow" style="margin-top:14px;justify-content:flex-end;display:flex">
       <button class="sbtn" id="expCancel">Annuller</button>
-      <button class="sbtn" id="expGo" style="background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600">Start eksport</button>
+      <button class="sbtn acc" id="expGo">Start eksport</button>
     </div>
   </div>
 </div>
@@ -402,7 +559,7 @@ $('btnOpenDir').onclick=openDirPicker;
       if(p!=='granted'){toast('Adgang til mappen blev ikke givet','err');return}
       b.style.display='none';
       await importFromDirHandle(dh);
-    }catch(err){console.warn('Genåbn fejlede',err);toast('Kunne ikke genåbne mappen — vælg den igen med 📁 Åbn mappe','err')}
+    }catch(err){console.warn('Genåbn fejlede',err);toast('Kunne ikke genåbne mappen — vælg den igen med Åbn mappe','err')}
   };
 })();
 $('btnAddFiles').onclick=()=>$('fileInput').click();
@@ -497,7 +654,7 @@ function renderBin(){
   const g=$('binGrid');g.innerHTML='';
   const list=S.files.filter(f=>S.filter==='all'||f.type===S.filter);
   if(!S.files.length){
-    g.innerHTML=`<div id="binEmpty"><div class="big">🎬</div>Klik på <b>📁 Åbn mappe</b> og vælg din Camera-mappe.<br><br>Du kan også trække filer direkte herind.</div>`;
+    g.innerHTML=`<div id="binEmpty"><div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg></div>Klik på <b><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-folder-open"></use></svg> Åbn mappe</b> og vælg din Camera-mappe.<br><br>Du kan også trække filer direkte herind.</div>`;
   }
   for(const it of list)g.appendChild(binCard(it));
   const nv=S.files.filter(f=>f.type==='video').length;
@@ -507,12 +664,13 @@ function binCard(it){
   const d=document.createElement('div');
   d.className='mcard'+(S.sel.kind==='file'&&S.sel.id===it.id?' sel':'');
   d.dataset.id=it.id;
+  d.tabIndex=0;d.setAttribute('role','button');
   d.innerHTML=`
-    ${it.thumb?`<img class="th" src="${it.thumb}">`:`<div class="th" style="display:flex;align-items:center;justify-content:center;color:var(--faint)">${it.probing?'…':'—'}</div>`}
-    <div class="typ">${it.type==='video'?'▶':'🖼'}</div>
+    ${it.thumb?`<img class="th" src="${it.thumb}" alt="">`:`<div class="th" style="display:flex;align-items:center;justify-content:center;color:var(--faint)">${it.probing?'…':'—'}</div>`}
+    <div class="typ" title="${it.type==='video'?'Video':'Billede'}"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#${it.type==='video'?'gi-play':'gi-image'}"></use></svg></div>
     ${it.type==='video'&&it.dur?`<div class="dur">${fmtDur(it.dur)}</div>`:''}
-    ${it.err?`<div class="bad">⚠ ${esc(it.err)}</div>`:''}
-    <button class="addBtn" title="Læg på tidslinjen">＋</button>
+    ${it.err?`<div class="bad"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg> ${esc(it.err)}</div>`:''}
+    <button class="addBtn" title="Læg på tidslinjen" aria-label="Læg på tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-file-plus"></use></svg></button>
     <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>`;
   d.onclick=e=>{
     if(e.target.classList.contains('addBtn')){addClipFromFile(it);return}
@@ -716,12 +874,12 @@ function play(){
   if(!S.clips.length)return;
   if(S.t>=totalDur()-0.01)S.t=0;
   const ca=clipAt(S.t);if(!ca)return;
-  S.playing=true;$('btnPlay').textContent='⏸';
+  S.playing=true;$('btnPlayIcon').setAttribute('href','icons.svg#gi-pause');
   lastWall=performance.now();
   startClip(ca.i,ca.local);
 }
 function pause(){
-  S.playing=false;$('btnPlay').textContent='▶';
+  S.playing=false;$('btnPlayIcon').setAttribute('href','icons.svg#gi-play');
   vA.pause();vB.pause();invalidate();
 }
 function togglePlay(){S.playing?pause():play()}
@@ -855,7 +1013,7 @@ function renderTL(){
     const tags=[];
     if(hasFx(c.fx))tags.push('FX');
     if(c.speed!==1)tags.push(c.speed+'×');
-    if(c.type==='image')tags.push('🖼');
+    if(c.type==='image')tags.push('<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-image"></use></svg>');
     b.innerHTML=`${tags.length?`<div class="fxdot">${tags.join(' ')}</div>`:''}
       <div class="dtag">${fmtDur(d)}</div>
       <div class="lbl">${it?esc(it.name):'?'}</div>
@@ -1076,6 +1234,11 @@ const FXPRESETS={
   'Nat':{...FXDEF,bright:.55,sat:.65,hue:15,contrast:1.12},
   'Drøm':{...FXDEF,bright:1.12,blur:2,sat:1.2,contrast:.9}
 };
+/* Ikon fra GITATO-spriten. Erstatter de emoji der før stod som markup i
+   inspektørens knapper — samme optiske vægt som resten af systemet. */
+const ICO=(name,mod)=>`<svg class="gi${mod?' '+mod:''}" aria-hidden="true"><use href="icons.svg#gi-${name}"></use></svg>`;
+/* Klikbare spans/divs er ikke tastaturbetjenbare af sig selv. */
+const asBtn=n=>{n.tabIndex=0;n.setAttribute('role','button');return n};
 function el(tag,cls,html){const d=document.createElement(tag);if(cls)d.className=cls;if(html!=null)d.innerHTML=html;return d}
 function row(label){const r=el('div','row');const l=el('label',null,label);r.appendChild(l);return r}
 function rng(parent,label,obj,key,min,max,step,opt){
@@ -1115,7 +1278,7 @@ function selBox(parent,label,obj,key,options,cb){
 }
 function sec(parent,title,miniLabel,miniCb){
   const d=el('div','sec'),h=el('h3',null,title);
-  if(miniLabel){const m=el('span','mini',miniLabel);m.onclick=miniCb;h.appendChild(m)}
+  if(miniLabel){const m=asBtn(el('span','mini',miniLabel));m.onclick=miniCb;h.appendChild(m)}
   d.appendChild(h);parent.appendChild(d);return d;
 }
 
@@ -1152,13 +1315,13 @@ function inspClip(B,c){
     rng(s3,'Pan lodret',c.kb,'py',-1,1,0.05);
     const pr=el('div','presets');
     for(const[nm,kb]of Object.entries({'Ingen':{zs:1,ze:1,px:0,py:0},'Zoom ind':{zs:1,ze:1.25,px:0,py:0},'Zoom ud':{zs:1.25,ze:1,px:0,py:0},'Pan →':{zs:1.15,ze:1.15,px:1,py:0},'Pan ←':{zs:1.15,ze:1.15,px:-1,py:0}})){
-      const p=el('span','preset',nm);p.onclick=()=>{Object.assign(c.kb,kb);markDirty();invalidate();renderInsp()};pr.appendChild(p);
+      const p=asBtn(el('span','preset',nm));p.onclick=()=>{Object.assign(c.kb,kb);markDirty();invalidate();renderInsp()};pr.appendChild(p);
     }
     s3.appendChild(pr);
   }
   const s2=sec(B,'Effekter','Nulstil',()=>{c.fx={...FXDEF};markDirty();invalidate();renderInsp();renderTL()});
   const pr=el('div','presets');pr.style.marginBottom='9px';
-  for(const nm of Object.keys(FXPRESETS)){const p=el('span','preset',nm);p.onclick=()=>{c.fx={...FXPRESETS[nm]};markDirty();invalidate();renderInsp();renderTL()};pr.appendChild(p)}
+  for(const nm of Object.keys(FXPRESETS)){const p=asBtn(el('span','preset',nm));p.onclick=()=>{c.fx={...FXPRESETS[nm]};markDirty();invalidate();renderInsp();renderTL()};pr.appendChild(p)}
   s2.appendChild(pr);
   rng(s2,'Lysstyrke',c.fx,'bright',0,2.5,0.01);
   rng(s2,'Kontrast',c.fx,'contrast',0,2.5,0.01);
@@ -1170,9 +1333,9 @@ function inspClip(B,c){
   rng(s2,'Invertér',c.fx,'invert',0,1,0.01);
   const s4=sec(B,'Handlinger');
   const br=el('div','btnRow');
-  const b1=el('button','sbtn','✂ Split ved playhead');b1.onclick=splitAtPlayhead;
-  const b2=el('button','sbtn','⧉ Duplikér');b2.onclick=duplicateSelected;
-  const b3=el('button','sbtn danger','🗑 Slet');b3.onclick=deleteSelected;
+  const b1=el('button','sbtn',ICO('scissors')+' Split ved playhead');b1.onclick=splitAtPlayhead;
+  const b2=el('button','sbtn',ICO('duplicate')+' Duplikér');b2.onclick=duplicateSelected;
+  const b3=el('button','sbtn danger',ICO('trash')+' Slet');b3.onclick=deleteSelected;
   br.append(b1,b2,b3);s4.appendChild(br);
 }
 function inspText(B,tx){
@@ -1187,8 +1350,13 @@ function inspText(B,tx){
   rng(s2,'Vandret %',tx,'x',0,100,1);
   rng(s2,'Lodret %',tx,'y',0,100,1);
   const g=el('div','grid9');
-  [[8,10],[50,10],[92,10],[8,50],[50,50],[92,50],[8,90],[50,90],[92,90]].forEach(([x,y])=>{
-    const b=el('button',null,'•');b.onclick=()=>{tx.x=x;tx.y=y;markDirty();invalidate();renderInsp()};g.appendChild(b);
+  const POS9=['Øverst til venstre','Øverst i midten','Øverst til højre',
+              'Midt til venstre','Midt på','Midt til højre',
+              'Nederst til venstre','Nederst i midten','Nederst til højre'];
+  [[8,10],[50,10],[92,10],[8,50],[50,50],[92,50],[8,90],[50,90],[92,90]].forEach(([x,y],i)=>{
+    const b=el('button',null,ICO('dot','gi--sm'));
+    b.title=POS9[i];b.setAttribute('aria-label',POS9[i]);
+    b.onclick=()=>{tx.x=x;tx.y=y;markDirty();invalidate();renderInsp()};g.appendChild(b);
   });
   const gr=row('Hurtig');gr.appendChild(g);s2.appendChild(gr);
   const s3=sec(B,'Udseende');
@@ -1204,8 +1372,8 @@ function inspText(B,tx){
   chk(s3,'Fade ind/ud',tx,'fade');
   const s4=sec(B,'Handlinger');
   const br=el('div','btnRow');
-  const b2=el('button','sbtn','⧉ Duplikér');b2.onclick=duplicateSelected;
-  const b3=el('button','sbtn danger','🗑 Slet');b3.onclick=deleteSelected;
+  const b2=el('button','sbtn',ICO('duplicate')+' Duplikér');b2.onclick=duplicateSelected;
+  const b3=el('button','sbtn danger',ICO('trash')+' Slet');b3.onclick=deleteSelected;
   br.append(b2,b3);s4.appendChild(br);
 }
 function inspSub(B,su){
@@ -1217,8 +1385,8 @@ function inspSub(B,su){
   num(s1,'Start (s)',su,'start',0,36000,0.1,{tl:1});
   num(s1,'Varighed (s)',su,'dur',0.1,600,0.1,{tl:1});
   const br=el('div','btnRow');
-  const bN=el('button','sbtn','＋ Næste ved playhead');bN.onclick=addSubAtPlayhead;
-  const b3=el('button','sbtn danger','🗑 Slet');b3.onclick=deleteSelected;
+  const bN=el('button','sbtn',ICO('file-plus')+' Næste ved playhead');bN.onclick=addSubAtPlayhead;
+  const b3=el('button','sbtn danger',ICO('trash')+' Slet');b3.onclick=deleteSelected;
   br.append(bN,b3);s1.appendChild(br);
   inspSubShared(B);
 }
@@ -1237,7 +1405,7 @@ function inspSubShared(B){
   const sorted=[...S.subs].sort((a,b)=>a.start-b.start);
   if(!sorted.length)list.appendChild(el('div','subItem','<span class="tx">Ingen endnu — tryk U ved playhead</span>'));
   for(const s of sorted){
-    const d=el('div','subItem'+(S.sel.id===s.id?' on':''));
+    const d=asBtn(el('div','subItem'+(S.sel.id===s.id?' on':'')));
     d.innerHTML=`<span class="st">${fmtT(s.start)}</span><span class="tx">${esc(s.text)}</span>`;
     d.onclick=()=>{select('sub',s.id);seekTo(s.start+0.01)};
     list.appendChild(d);
@@ -1250,13 +1418,13 @@ function inspFile(B){
   if(!f)return;
   const s1=sec(B,'Info');
   s1.appendChild(el('div',null,`
-    ${f.thumb?`<img src="${f.thumb}" style="width:100%;border-radius:8px;margin-bottom:8px">`:''}
+    ${f.thumb?`<img src="${f.thumb}" alt="" style="width:100%;border-radius:var(--gt-r-3);margin-bottom:8px">`:''}
     <div style="font-size:12px;color:var(--dim);line-height:1.7">
     <b style="color:var(--txt)">${esc(f.name)}</b><br>
     ${f.type==='video'?'Video':'Billede'} · ${f.w}×${f.h}${f.dur?` · ${fmtDur(f.dur)}`:''}<br>
-    ${(f.size/1048576).toFixed(1)} MB ${f.err?`<br><span style="color:var(--err)">⚠ ${esc(f.err)}</span>`:''}</div>`));
+    ${(f.size/1048576).toFixed(1)} MB ${f.err?`<br><span style="color:var(--err)">${ICO('warning')} ${esc(f.err)}</span>`:''}</div>`));
   const br=el('div','btnRow');br.style.marginTop='10px';
-  const b=el('button','sbtn','＋ Læg på tidslinjen');b.onclick=()=>addClipFromFile(f);
+  const b=el('button','sbtn',ICO('file-plus')+' Læg på tidslinjen');b.onclick=()=>addClipFromFile(f);
   br.appendChild(b);s1.appendChild(br);
 }
 function inspProject(B){
@@ -1282,7 +1450,7 @@ function inspProject(B){
     Samlet varighed: <b style="color:var(--txt)">${fmtT(totalDur())}</b><br>
     Medier i bibliotek: <b style="color:var(--txt)">${S.files.length}</b></div>`));
   const s3=sec(B,'Projekt');
-  s3.appendChild(el('div',null,`<div style="font-size:11px;color:var(--faint);margin-bottom:8px">Gemmes automatisk i browseren. Brug 💾 Gem for en projektfil du kan dele/flytte.</div>`));
+  s3.appendChild(el('div',null,`<div style="font-size:11px;color:var(--faint);margin-bottom:8px">Gemmes automatisk i browseren. Brug ${ICO('save')} Gem for en projektfil du kan dele/flytte.</div>`));
   const br=el('div','btnRow');
   const bc=el('button','sbtn danger','Ryd tidslinjen');
   bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty();invalidate();$('stageHint').style.display='flex'}};
@@ -1393,6 +1561,24 @@ addEventListener('keydown',e=>{
     case'Escape':deselect();break;
   }
 });
+
+/* Enter/Mellemrum skal aktivere de klikbare spans og kort (chips, presets,
+   mini-links, undertekst-listen, medie-kort). De er ikke <button>, så
+   browseren gør det ikke selv. Lytteren sidder på document og standser
+   boblen, så den globale genvej ovenfor ikke også fyrer på samme tast.
+   Rigtige <button> springes over — dem klarer browseren. */
+document.addEventListener('keydown',e=>{
+  /* Samme spærre som den globale genvejslytter ovenfor: under en kørende
+     eksport må tastaturet ikke ændre model-tilstand. Uden den kunne Enter på
+     en fokuseret chip/preset/medie-kort skifte filter, lægge en FX-preset på
+     et klip eller flytte markeringen midt i eksporten. */
+  if(expRunning)return;
+  if(e.key!=='Enter'&&e.key!==' ')return;
+  const t=e.target;
+  if(!t||t.tagName==='BUTTON'||typeof t.matches!=='function'||!t.matches('[role="button"]'))return;
+  e.preventDefault();e.stopPropagation();
+  t.click();
+});
 </script>
 <script>
 /* ================================================================
@@ -1414,7 +1600,7 @@ $('btnExport').onclick=()=>{
   f.appendChild(new Option('WebM · VP9 (offline-fallback)','webm'));
   updateExpInfo();
   $('expOpts').style.display='block';$('expProg').style.display='none';
-  $('expGo').style.display='inline-block';
+  $('expGo').style.display='';   /* '' og ikke 'inline-block': .sbtn er nu inline-flex (fælles knapbase) */
   $('modalBack').classList.add('open');
 };
 function updateExpInfo(){
@@ -1714,11 +1900,11 @@ function netBadgeUpdate(){
   if(!window.showDirectoryPicker||!window.VideoEncoder){
     const b=document.createElement('div');
     b.id='capBanner';
-    b.style.cssText='position:fixed;top:46px;left:0;right:0;z-index:50;background:#3b2a12;border-bottom:1px solid var(--warn);color:#ffd9a0;font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:10px';
-    b.innerHTML='<span>⚠ Din browser understøtter ikke alle funktioner (mappevalg / MP4-eksport) — fuld funktionalitet kræver Chrome eller Edge.</span>';
+    b.style.cssText='position:fixed;top:46px;left:0;right:0;z-index:50;background:var(--gt-sub-1);border-bottom:1px solid var(--gt-warn);color:var(--gt-warn-ink);font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:10px';
+    b.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px">'+ICO('warning')+'Din browser understøtter ikke alle funktioner (mappevalg / MP4-eksport) — fuld funktionalitet kræver Chrome eller Edge.</span>';
     const x=document.createElement('button');
-    x.textContent='✕';x.title='Luk';
-    x.style.cssText='margin-left:auto;background:none;border:none;color:inherit;cursor:pointer;font-size:13px';
+    x.innerHTML=ICO('close');x.title='Luk';x.setAttribute('aria-label','Luk');
+    x.style.cssText='margin-left:auto;background:none;border:none;color:inherit;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;border-radius:var(--gt-r-1)';
     x.onclick=()=>b.remove();
     b.appendChild(x);
     document.body.appendChild(b);

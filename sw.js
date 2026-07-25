@@ -1,8 +1,10 @@
 /* MedieStudio service worker — cache-first app shell */
-const VERSION = 'mediestudio-v1';
+const VERSION = 'mediestudio-v2';
 const SHELL = [
   './',
   './index.html',
+  './ds.css',
+  './icons.svg',
   './mp4-muxer.min.js',
   './manifest.webmanifest',
   './favicon.png',
