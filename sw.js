@@ -1,5 +1,5 @@
 /* MedieStudio service worker — cache-first app shell */
-const VERSION = 'mediestudio-v2';
+const VERSION = 'mediestudio-v3';
 const SHELL = [
   './',
   './index.html',
@@ -10,7 +10,14 @@ const SHELL = [
   './favicon.png',
   './icon-192.png',
   './icon-512.png',
-  './icon-maskable-512.png'
+  './icon-maskable-512.png',
+  './fonts/chakra-petch-500.woff2',
+  './fonts/chakra-petch-600.woff2',
+  './fonts/chakra-petch-700.woff2',
+  './fonts/barlow-400.woff2',
+  './fonts/barlow-500.woff2',
+  './fonts/barlow-600.woff2',
+  './fonts/barlow-700.woff2'
 ];
 
 self.addEventListener('install', e => {

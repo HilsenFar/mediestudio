@@ -17,6 +17,20 @@
    redigerings-UI: panel-geometri, tidslinje og de tre spor-farver.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Brandfontene ligger lokalt (fonts/, SIL OFL — se fonts/OFL-*.txt), så den
+   installerede PWA uden net og desktop-udgaven ikke falder tilbage til
+   Segoe UI. ds.css er uændret (deles med de andre flader); dens @import af
+   Google Fonts står tidligere i kaskaden, og ved samme familie/vægt/
+   unicode-range vinder den sidst definerede @font-face — altså disse. Kun
+   latin-udsnittet (dansk + engelsk) ligger lokalt; sw.js precacher filerne. */
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/chakra-petch-500.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/chakra-petch-600.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Chakra Petch";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/chakra-petch-700.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/barlow-400.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow";font-style:normal;font-weight:500;font-display:swap;src:url(fonts/barlow-500.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/barlow-600.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Barlow";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/barlow-700.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
 /* Aliaser: fladens gamle variabelnavne peger nu på DS-tokens, så al
    eksisterende markup og alle JS-skabeloner (fx var(--err) i en
    template-streng) følger med uden at blive rørt.
@@ -61,16 +75,30 @@ html,body{height:100%;overflow:hidden}
    overhovedet). Video redigeres ikke på en 375px-telefon, men UI'et skal kunne nås.
    980px og ikke 760px: ved 760px bliver midterkolonnen kun 172px, og så flyder
    transportrækken (#tcur/#ttot/#volWrap) ud over sin kolonne og forsvinder ind
-   under inspektørens uigennemsigtige plade. Transportrækken måler 377px, så
-   270 + 377 + 318 = 965 er gulvet; 980 giver lidt luft. */
-@media (max-width: 980px){
+   under inspektørens uigennemsigtige plade.
+   1100px og ikke 980px: værktøjslinjen måler ~1090px med alle knapper, og
+   transportrækken er først helt fri (32px-knapper, én linje) når midterkolonnen
+   er ~510px: 270 + 510 + 318 = 1098. Under gulvet panorerer siden i stedet for
+   at klippe værktøjslinjen; desktop-vinduets minWidth følger samme tal. */
+@media (max-width: 1100px){
   html{overflow-x:auto}
-  body{min-width:980px}
+  body{min-width:1100px}
 }
+/* Bannerrækken (grid-række 2) rummer kompatibilitetsbanneret og
+   smalskærmsbanneret; begge er 0px når de ikke er der.
+   Smalskærmsbanneret er højst én viewport bredt og følger panoreringen
+   via transform (sat i boot), så tekst og luk-knap bliver stående i
+   synsfeltet mens body (min-width 1100px) panorerer under det.
+   position:sticky duer ikke her: body{overflow:hidden} gør body til
+   scroll-container, og det er html der panorerer. */
+#notices{grid-row:2;display:flex;flex-direction:column;min-width:0}
+#narrowBanner{max-width:100vw;will-change:transform}
 body{
   background:var(--bg);color:var(--txt);
   font:400 13px/1.5 var(--gt-font-body);
-  display:grid;grid-template-rows:46px 1fr 270px 24px;
+  /* Række 2 er bannerrækken (#notices: kompatibilitet, smal skærm); tom = 0px.
+     Panelerne har fast grid-row, så rækken aldrig forskyder dem. */
+  display:grid;grid-template-rows:46px auto 1fr 270px 24px;
   user-select:none;-webkit-user-select:none;
 }
 input,select,textarea,button{font:inherit;color:inherit}
@@ -116,7 +144,7 @@ input,select,textarea,button{font:inherit;color:inherit}
    af — alt uden for vinduets kant var simpelthen uden for rækkevidde, fordi
    filen aldrig har haft en media query. Lad den scrolle i stedet. Det er
    stadig en desktop-editor; det her forhindrer bare at den fjerne ende forsvinder. */
-#toolbar{display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);
+#toolbar{grid-row:1;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--line);
   overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 /* :not(.grow) — ellers ville #toolbar > * (specificitet 1,0,0) slå .grow{flex:1}
    (0,1,0) ihjel, og hele højregruppen (netBadge · Still · Eksportér) ville
@@ -147,12 +175,12 @@ input,select,textarea,button{font:inherit;color:inherit}
 .grow{flex:1}
 
 /* ---------- Main ---------- */
-#main{display:grid;grid-template-columns:270px 1fr 318px;min-height:0}
+#main{grid-row:3;display:grid;grid-template-columns:270px 1fr 318px;min-height:0}
 
 /* ---------- Bin ---------- */
 #bin{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .panelHead{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-family:var(--gt-font-ui);font-weight:700;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:var(--gt-track-label)}
-.chip{border-radius:var(--gt-r-1);padding:2px 10px;font-size:11px;color:var(--dim);text-transform:none;letter-spacing:0;font-weight:500}
+.chip{border-radius:var(--gt-r-1);padding:3px 10px;font-size:11px;color:var(--dim);text-transform:none;letter-spacing:0;font-weight:500}
 /* Aktiv chip: oplyst plade + tungere vægt, så tilstanden også bæres af
    noget andet end farve (SPEC regel 3). */
 .chip.on{background:var(--gt-sig);border-color:var(--gt-sig-dk);color:var(--gt-ink-on-lit);font-weight:700}
@@ -179,8 +207,10 @@ input,select,textarea,button{font:inherit;color:inherit}
 #cv{max-width:calc(100% - 24px);max-height:calc(100% - 16px);background:#000;box-shadow:var(--shadow);border-radius:var(--gt-r-2)}
 #stageHint{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;color:var(--faint);pointer-events:none;text-align:center}
 #stageHint .big{font-size:42px;color:var(--gt-ink-4)}
-#transport{display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-top:1px solid var(--line)}
-.pbtn{background:transparent;border-color:transparent;box-shadow:none;color:var(--txt);width:32px;height:28px;padding:0;font-size:14px}
+/* flex-wrap: bliver kolonnen for smal, ombrydes lydstyrken til en ny linje i
+   stedet for at knapperne klemmes (de målte 18px ved layout-gulvet). */
+#transport{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.pbtn{flex:none;background:transparent;border-color:transparent;box-shadow:none;color:var(--txt);width:32px;height:28px;padding:0;font-size:14px}
 .pbtn:hover{background:var(--panel3);border-color:var(--line)}
 .pbtn.main{background:linear-gradient(180deg,var(--gt-pl-3),var(--gt-pl-2));border-color:var(--gt-edge-bezel);box-shadow:var(--gt-e-1);width:44px}
 #tcur{font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;color:var(--acc2);font-weight:700}
@@ -210,7 +240,7 @@ textarea{width:100%;font-family:var(--gt-font-body);background:var(--gt-void);bo
 .preset{padding:3px 9px;font-size:11px;color:var(--dim);font-weight:500}
 .preset:hover{color:var(--txt)}
 .grid9{display:grid;grid-template-columns:repeat(3,26px);gap:3px}
-.grid9 button{width:26px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--gt-pl-2),var(--gt-pl-1));border:1px solid var(--line);border-radius:var(--gt-r-1);cursor:pointer;font-size:9px;color:var(--dim);box-shadow:var(--gt-e-1)}
+.grid9 button{width:26px;height:24px;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(180deg,var(--gt-pl-2),var(--gt-pl-1));border:1px solid var(--line);border-radius:var(--gt-r-1);cursor:pointer;font-size:9px;color:var(--dim);box-shadow:var(--gt-e-1)}
 .grid9 button:hover{border-color:var(--gt-sig);color:var(--txt)}
 #inspEmpty{color:var(--faint);text-align:center;padding:30px 14px}
 .subList{max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--gt-sub-1)}
@@ -235,7 +265,7 @@ textarea{width:100%;font-family:var(--gt-font-body);background:var(--gt-void);bo
 .sbtn.danger:hover{border-color:var(--err);color:var(--err)}
 
 /* ---------- Timeline ---------- */
-#tl{background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-rows:34px 1fr;min-height:0}
+#tl{grid-row:4;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-rows:34px 1fr;min-height:0}
 #tlTools{display:flex;align-items:center;gap:6px;padding:0 10px;border-bottom:1px solid var(--line)}
 #tlTools .tbtn{padding:3px 9px;font-size:12px}
 #tlZoom{width:110px}
@@ -270,7 +300,7 @@ textarea{width:100%;font-family:var(--gt-font-body);background:var(--gt-void);bo
 .ghostLine{position:absolute;top:26px;bottom:0;width:0;border-left:2px dashed var(--warn);z-index:7;pointer-events:none;display:none}
 
 /* ---------- Statusbar ---------- */
-#status{display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden}
+#status{grid-row:5;display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden}
 #status b{color:var(--dim);font-weight:600}
 kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2px;border-radius:var(--gt-r-1);padding:0 5px;font-size:10px;font-family:var(--gt-font-mono)}
 
@@ -322,12 +352,29 @@ textarea:focus-visible,
 .chip.on:focus-visible,.mcard .addBtn:focus-visible{
   box-shadow:var(--gt-focus-ring);
 }
-/* Statiske spans der opfører sig som knapper får også en synlig ramme. */
-[role="button"]{cursor:pointer}
+/* Tidslinjeblokke: .blk.sel bruger selv outline i signalfarven, så fokus
+   tegnes i fokus-blækket med afstand, og valgt+fokus kan skelnes. */
+.blk:focus-visible{outline:2px solid var(--gt-focus-ink);outline-offset:2px}
+/* Statiske spans der opfører sig som knapper får også en synlig ramme.
+   Blokkene på tidslinjen beholder deres grab-markør. */
+[role="button"]:not(.blk){cursor:pointer}
 
 @media (prefers-reduced-motion:reduce){
   .toast{animation:none}
   .tbtn.acc:hover,.sbtn.acc:hover,.chip.on:hover{filter:none}
+}
+
+/* Berøringsskærm (WCAG 2.5.8): klikmål på mindst 24px. Kun størrelser
+   ændres, ingen placering. Slideren tegner selv sit 4px-spor midt i det
+   24px høje felt. */
+@media (pointer:coarse){
+  .hnd{width:18px}
+  .chip{padding:5px 12px}
+  input[type=range]{height:24px;background:linear-gradient(var(--gt-edge-hair),var(--gt-edge-hair)) center/100% 4px no-repeat}
+  input[type=range]::-webkit-slider-thumb{width:20px;height:20px}
+  .row input[type=checkbox],#snapChk{width:24px;height:24px}
+  .sec h3 .mini{padding:6px 8px}
+  .mcard .addBtn{width:26px;height:26px}
 }
 </style>
 </head>
@@ -345,7 +392,7 @@ textarea:focus-visible,
   <button class="tbtn" id="btnLoadProj" title="Indlæs projekt-fil"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-upload"></use></svg> Indlæs</button>
   <div class="grow"></div>
   <span id="netBadge" style="font-size:11px;color:var(--faint)"></span>
-  <button class="tbtn" id="btnStill" title="Gem nuværende billede som PNG"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-camera"></use></svg> Still</button>
+  <button class="tbtn" id="btnStill" title="Gem nuværende billede som PNG"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-camera"></use></svg> Stillbillede</button>
   <button class="tbtn acc" id="btnExport"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-download"></use></svg> Eksportér video</button>
 </div>
 
@@ -399,12 +446,12 @@ textarea:focus-visible,
 
 <div id="tl">
   <div id="tlTools">
-    <button class="tbtn" id="btnSplit" title="Del klip ved playhead (S)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-scissors"></use></svg> Split</button>
+    <button class="tbtn" id="btnSplit" title="Del klip ved markøren (S)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-scissors"></use></svg> Del</button>
     <button class="tbtn" id="btnDel" title="Slet valgte (Delete)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-trash"></use></svg> Slet</button>
     <button class="tbtn" id="btnDup" title="Duplikér valgte (Ctrl+D)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-duplicate"></use></svg> Duplikér</button>
     <div class="sep"></div>
-    <button class="tbtn" id="btnAddText" title="Ny tekst ved playhead (T)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</button>
-    <button class="tbtn" id="btnAddSub" title="Ny undertekst ved playhead (U)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</button>
+    <button class="tbtn" id="btnAddText" title="Ny tekst ved markøren (T)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</button>
+    <button class="tbtn" id="btnAddSub" title="Ny undertekst ved markøren (U)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</button>
     <div class="sep"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);cursor:pointer">
       <input type="checkbox" id="snapChk" checked style="accent-color:var(--acc)"> Snap
@@ -412,7 +459,7 @@ textarea:focus-visible,
     <div class="grow"></div>
     <span style="font-size:11px;color:var(--faint)">Zoom</span>
     <input type="range" id="tlZoom" min="8" max="400" step="1" value="60" title="Zoom på tidslinjen" aria-label="Zoom på tidslinjen">
-    <button class="tbtn" id="btnFit" title="Tilpas hele tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-fit"></use></svg> Fit</button>
+    <button class="tbtn" id="btnFit" title="Tilpas hele tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-fit"></use></svg> Tilpas</button>
   </div>
   <div id="tlBody">
     <div id="tlLabels">
@@ -439,12 +486,12 @@ textarea:focus-visible,
   <span id="stProj"><b>1080×1920</b> · 30 fps</span>
   <span id="stSel"></span>
   <span class="grow"></span>
-  <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> split · <kbd>T</kbd> tekst · <kbd>U</kbd> undertekst · <kbd>←→</kbd> billede · <kbd>Del</kbd> slet · <kbd>Ctrl+S</kbd> gem</span>
+  <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> del · <kbd>T</kbd> tekst · <kbd>U</kbd> undertekst · <kbd>←→</kbd> billede · <kbd>Del</kbd> slet · <kbd>Ctrl+S</kbd> gem</span>
 </div>
 
 <div id="modalBack">
-  <div class="modal">
-    <h2>Eksportér video</h2>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="expTitle">
+    <h2 id="expTitle">Eksportér video</h2>
     <div id="expOpts">
       <div class="row"><label>Format</label><select id="expFmt"></select></div>
       <div class="row"><label>Opløsning</label><select id="expRes">
@@ -469,7 +516,7 @@ textarea:focus-visible,
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="dropOverlay">Slip filerne her</div>
 <input type="file" id="fileInput" multiple accept="video/*,image/*,.mp4,.mov,.m4v,.webm,.jpg,.jpeg,.png,.webp,.gif" style="display:none">
 <input type="file" id="dirInput" webkitdirectory style="display:none">
@@ -492,7 +539,7 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;'
 const lerp=(a,b,t)=>a+(b-a)*t;
 function fmtT(t,fps){t=Math.max(0,t||0);const m=Math.floor(t/60),s=Math.floor(t%60),f=Math.floor((t%1)*(fps||S.proj.fps));return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(f).padStart(2,'0')}`}
 function fmtDur(t){return t>=60?`${Math.floor(t/60)}m${Math.round(t%60)}s`:`${(Math.round(t*10)/10)}s`}
-function toast(msg,cls){const d=document.createElement('div');d.className='toast '+(cls||'');d.textContent=msg;$('toasts').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},cls==='err'?5200:2600)}
+function toast(msg,cls){const d=document.createElement('div');d.className='toast '+(cls||'');d.textContent=msg;d.setAttribute('role',cls==='err'?'alert':'status');$('toasts').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},cls==='err'?5200:2600)}
 const VID_EXT=/\.(mp4|mov|m4v|webm|mkv)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|bmp)$/i;
 
 /* ---------- Tilstand ---------- */
@@ -608,12 +655,24 @@ function probeVideo(it){
   return new Promise((res)=>{
     const v=document.createElement('video');
     v.preload='metadata';v.muted=true;v.src=it.url;
-    const bail=setTimeout(()=>{it.err='Timeout / codec ikke understøttet';cleanup();res()},15000);
+    const bail=setTimeout(()=>{it.err='Tidsudløb / formatet understøttes ikke';cleanup();res()},15000);
     function cleanup(){clearTimeout(bail);v.removeAttribute('src');v.load()}
     v.onerror=()=>{it.err='Formatet kan ikke afspilles i browseren';cleanup();res()};
     v.onloadedmetadata=()=>{
       it.dur=v.duration||0;it.w=v.videoWidth;it.h=v.videoHeight;
       if(!it.w){it.err='Ingen videospor';cleanup();res();return}
+      /* WebM fra MediaRecorder (også appens egen eksport) har ingen varighed i
+         headeren, så Chrome melder Infinity. Et seek mod enden tvinger den til
+         at regne varigheden ud; derefter fortsættes som normalt. */
+      if(!Number.isFinite(v.duration)){
+        v.ontimeupdate=()=>{
+          if(!Number.isFinite(v.duration))return;
+          v.ontimeupdate=null;it.dur=v.duration;
+          v.currentTime=Math.min(1,it.dur*0.15);
+        };
+        v.currentTime=1e101;
+        return;
+      }
       v.currentTime=Math.min(1,it.dur*0.15);
     };
     v.onseeked=()=>{
@@ -688,6 +747,7 @@ function renderBinCard(it){
 function addClipFromFile(it,atIndex){
   if(it.err){toast('Filen kan ikke bruges: '+it.err,'err');return}
   if(it.probing){toast('Vent — filen analyseres stadig');return}
+  if(it.type==='video'&&!(Number.isFinite(it.dur)&&it.dur>0)){toast('Videoens længde kan ikke bestemmes, så filen kan ikke bruges','err');return}
   const c=it.type==='video'
     ?{id:uid(),fid:it.id,type:'video',in:0,out:it.dur,speed:1,volume:1,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF}}
     :{id:uid(),fid:it.id,type:'image',imgDur:4,in:0,out:4,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF},kb:{zs:1.0,ze:1.1,px:0,py:0}};
@@ -1007,6 +1067,11 @@ function renderTL(){
     const it=fileOf(c),d=clipDur(c),b=document.createElement('div');
     b.className='blk clip'+(S.sel.kind==='clip'&&S.sel.id===c.id?' sel':'');
     b.dataset.id=c.id;
+    /* Tastatur: Tab til blokken, Enter/Mellemrum vælger (click med detail 0
+       fra [role=button]-lytteren; pointer-valg sker allerede i pointerdown). */
+    b.tabIndex=0;b.setAttribute('role','button');
+    b.setAttribute('aria-label',`Klip ${i+1}: ${it?it.name:'?'} (${fmtDur(d)})`);
+    b.addEventListener('click',e=>{if(e.detail===0)select('clip',c.id)});
     b.style.left=(acc*S.pxPerSec)+'px';
     b.style.width=Math.max(14,d*S.pxPerSec-2)+'px';
     if(it&&it.thumb){b.style.backgroundImage=`url(${it.thumb})`;b.style.backgroundSize='auto 100%';b.style.backgroundRepeat='repeat-x'}
@@ -1036,6 +1101,9 @@ function renderOverlayTrack(tr,arr,cls,kind){
     const b=document.createElement('div');
     b.className='blk '+cls+(S.sel.kind===kind&&S.sel.id===x.id?' sel':'');
     b.dataset.id=x.id;
+    b.tabIndex=0;b.setAttribute('role','button');
+    b.setAttribute('aria-label',`${kind==='text'?'Tekst':'Undertekst'}: ${(x.text||'').replace(/\n/g,' ')}`);
+    b.addEventListener('click',e=>{if(e.detail===0)select(kind,x.id)});
     b.style.left=(x.start*S.pxPerSec)+'px';
     b.style.width=Math.max(12,x.dur*S.pxPerSec-2)+'px';
     if(lane>0){b.style.top=(4+lane*20)+'px';b.style.bottom='auto';b.style.height='17px'}
@@ -1124,15 +1192,17 @@ function attachOverlayEvents(b,x,kind){
 /* ---------- Lineal + navigation ---------- */
 function drawRuler(){
   const w=tlScroll.clientWidth,dpr=devicePixelRatio||1;
+  /* Canvas kan ikke læse var(): tokens hentes fra body, så linealen følger DS'et. */
+  const cs=getComputedStyle(document.body),tok=n=>cs.getPropertyValue(n).trim();
   ruler.width=w*dpr;ruler.height=26*dpr;
   ruler.style.width=w+'px';ruler.style.left=tlScroll.scrollLeft+'px';
   const g=ruler.getContext('2d');g.scale(dpr,dpr);
-  g.fillStyle='#12151d';g.fillRect(0,0,w,26);
+  g.fillStyle=tok('--gt-pl-1');g.fillRect(0,0,w,26);
   const steps=[0.1,0.2,0.5,1,2,5,10,15,30,60,120,300];
   let step=steps.find(s=>s*S.pxPerSec>=68)||600;
   const t0=tlScroll.scrollLeft/S.pxPerSec,t1=(tlScroll.scrollLeft+w)/S.pxPerSec;
-  g.fillStyle='#8b93a7';g.font='10px Segoe UI';g.textBaseline='top';
-  g.strokeStyle='#2a3040';g.beginPath();
+  g.fillStyle=tok('--gt-ink-3');g.font='10px '+tok('--gt-font-ui');g.textBaseline='top';
+  g.strokeStyle=tok('--gt-edge-hair');g.beginPath();
   for(let t=Math.floor(t0/step)*step;t<=t1;t+=step){
     const x=t*S.pxPerSec-tlScroll.scrollLeft;
     g.moveTo(x+0.5,14);g.lineTo(x+0.5,26);
@@ -1179,7 +1249,7 @@ tlScroll.addEventListener('wheel',e=>{
 /* ---------- Redigeringshandlinger ---------- */
 function splitAtPlayhead(){
   const ca=clipAt(S.t);
-  if(!ca||ca.local<0.05||ca.local>clipDur(ca.c)-0.05){toast('Placér playhead midt i et klip for at splitte');return}
+  if(!ca||ca.local<0.05||ca.local>clipDur(ca.c)-0.05){toast('Placér markøren midt i et klip for at dele det');return}
   const c=ca.c,c2={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};
   if(c.type==='video'){
     const cut=c.in+ca.local*c.speed;
@@ -1333,7 +1403,7 @@ function inspClip(B,c){
   rng(s2,'Invertér',c.fx,'invert',0,1,0.01);
   const s4=sec(B,'Handlinger');
   const br=el('div','btnRow');
-  const b1=el('button','sbtn',ICO('scissors')+' Split ved playhead');b1.onclick=splitAtPlayhead;
+  const b1=el('button','sbtn',ICO('scissors')+' Del ved markøren');b1.onclick=splitAtPlayhead;
   const b2=el('button','sbtn',ICO('duplicate')+' Duplikér');b2.onclick=duplicateSelected;
   const b3=el('button','sbtn danger',ICO('trash')+' Slet');b3.onclick=deleteSelected;
   br.append(b1,b2,b3);s4.appendChild(br);
@@ -1385,7 +1455,7 @@ function inspSub(B,su){
   num(s1,'Start (s)',su,'start',0,36000,0.1,{tl:1});
   num(s1,'Varighed (s)',su,'dur',0.1,600,0.1,{tl:1});
   const br=el('div','btnRow');
-  const bN=el('button','sbtn',ICO('file-plus')+' Næste ved playhead');bN.onclick=addSubAtPlayhead;
+  const bN=el('button','sbtn',ICO('file-plus')+' Næste ved markøren');bN.onclick=addSubAtPlayhead;
   const b3=el('button','sbtn danger',ICO('trash')+' Slet');b3.onclick=deleteSelected;
   br.append(bN,b3);s1.appendChild(br);
   inspSubShared(B);
@@ -1403,7 +1473,7 @@ function inspSubShared(B){
   const s3=sec(B,'Alle undertekster');
   const list=el('div','subList');
   const sorted=[...S.subs].sort((a,b)=>a.start-b.start);
-  if(!sorted.length)list.appendChild(el('div','subItem','<span class="tx">Ingen endnu — tryk U ved playhead</span>'));
+  if(!sorted.length)list.appendChild(el('div','subItem','<span class="tx">Ingen endnu — tryk U ved markøren</span>'));
   for(const s of sorted){
     const d=asBtn(el('div','subItem'+(S.sel.id===s.id?' on':'')));
     d.innerHTML=`<span class="st">${fmtT(s.start)}</span><span class="tx">${esc(s.text)}</span>`;
@@ -1474,16 +1544,37 @@ function serializeProject(){
 }
 function applyProject(p){
   $('projName').value=p.name||'Mit projekt';
-  Object.assign(S.proj,p.proj||{});S.projManual=!!p.projManual;
+  /* Projektfiler kommer udefra (deles, flyttes, gendannes fra localStorage).
+     Alle tal tvinges til tal inden for deres grænser, valg til kendte værdier
+     og id'er laves om, så intet felt kan ende som markup i innerHTML
+     (stProj, fxdot) eller som en ugyldig selector. */
+  const num=(v,d,lo,hi)=>{const n=typeof v==='string'&&v.trim()!==''?+v:v;return typeof n==='number'&&Number.isFinite(n)?clamp(n,lo,hi):d};
+  const arr=a=>Array.isArray(a)?a:[];
+  const q=p.proj||{};
+  S.proj.w=num(q.w,S.proj.w,16,7680)&~1;
+  S.proj.h=num(q.h,S.proj.h,16,7680)&~1;
+  S.proj.fps=[24,25,30,50,60].includes(+q.fps)?+q.fps:S.proj.fps;
+  S.proj.bg=/^#[0-9a-f]{6}$/i.test(q.bg)?q.bg:S.proj.bg;
+  S.projManual=!!p.projManual;
   Object.assign(S.subStyle,p.subStyle||{});
-  S.texts=(p.texts||[]).map(t=>({...t}));
-  S.subs=(p.subs||[]).map(s=>({...s}));
+  S.texts=arr(p.texts).map(t=>({...t,id:uid(),text:typeof t.text==='string'?t.text:'',start:num(t.start,0,0,36000),dur:num(t.dur,3,0.1,3600),x:num(t.x,50,0,100),y:num(t.y,50,0,100),size:num(t.size,72,16,320),outline:num(t.outline,6,0,24)}));
+  S.subs=arr(p.subs).map(s=>({...s,id:uid(),text:typeof s.text==='string'?s.text:'',start:num(s.start,0,0,36000),dur:num(s.dur,2.5,0.1,600)}));
   const missing=[];
   S.clips=[];
-  for(const c of(p.clips||[])){
+  for(const c of arr(p.clips)){
     const f=S.files.find(x=>x.name===c.fileName&&!x.err);
-    if(f)S.clips.push({...c,fid:f.id,fileName:undefined});
-    else missing.push(c.fileName);
+    if(!f){missing.push(c.fileName);continue}
+    const fx=c.fx||{},kb=c.kb,type=f.type==='image'?'image':'video';
+    const cl={
+      id:uid(),fid:f.id,type,
+      in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
+      speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,2),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
+      fit:c.fit==='contain'?'contain':'cover',
+      fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
+      kb:kb?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),px:num(kb.px,0,-1,1),py:num(kb.py,0,-1,1)}:undefined
+    };
+    if(type==='image')cl.out=cl.imgDur;else if(cl.out<cl.in+0.05)cl.out=cl.in+0.05;
+    S.clips.push(cl);
   }
   applyProjSize();renderTL();invalidate();deselect();
   if(S.clips.length)$('stageHint').style.display='none';
@@ -1536,6 +1627,19 @@ $('projInput').onchange=async e=>{
    TASTATUR
    ================================================================ */
 addEventListener('keydown',e=>{
+  /* Åben eksport-dialog: Escape lukker (ikke under kørende eksport), og Tab
+     holdes inde i dialogen. Står FØR expRunning-spærren, så fælden også
+     virker mens der eksporteres. */
+  if($('modalBack').classList.contains('open')){
+    if(e.key==='Escape'&&!expRunning){e.preventDefault();closeExpModal();return}
+    if(e.key==='Tab'){
+      const f=[...document.querySelectorAll('.modal button,.modal select')].filter(x=>x.offsetParent);
+      const i=f.indexOf(document.activeElement);
+      if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}
+      else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}
+    }
+    return;
+  }
   if(expRunning)return;
   const tag=(e.target.tagName||'').toLowerCase();
   if(tag==='input'||tag==='textarea'||tag==='select'){
@@ -1585,7 +1689,7 @@ document.addEventListener('keydown',e=>{
    EKSPORT — MP4 (WebCodecs+mp4-muxer, hardware) & WebM (MediaRecorder)
    ================================================================ */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let expCancelled=false,expRunning=false;
+let expCancelled=false,expRunning=false,expPrevFocus=null;
 const canMp4=()=>!!(window.Mp4Muxer&&window.VideoEncoder);
 
 $('btnStill').onclick=()=>{
@@ -1597,22 +1701,31 @@ $('btnExport').onclick=()=>{
   if(!S.clips.length){toast('Tidslinjen er tom — tilføj klip først','err');return}
   const f=$('expFmt');f.innerHTML='';
   if(canMp4())f.appendChild(new Option('MP4 · H.264 (anbefalet)','mp4'));
-  f.appendChild(new Option('WebM · VP9 (offline-fallback)','webm'));
+  f.appendChild(new Option('WebM · VP9 (virker offline)','webm'));
   updateExpInfo();
   $('expOpts').style.display='block';$('expProg').style.display='none';
   $('expGo').style.display='';   /* '' og ikke 'inline-block': .sbtn er nu inline-flex (fælles knapbase) */
+  expPrevFocus=document.activeElement;
   $('modalBack').classList.add('open');
+  $('expGo').focus();
 };
+/* Dialogen lukkes ét sted, så fokus altid vender tilbage til det element der åbnede den. */
+function closeExpModal(){
+  $('modalBack').classList.remove('open');
+  const p=expPrevFocus;expPrevFocus=null;
+  if(p&&p.isConnected&&typeof p.focus==='function')p.focus();
+}
 function updateExpInfo(){
   const q=+$('expQ').value,half=$('expRes').value!=='proj';
   const W=(half?S.proj.w/2:S.proj.w)|0,H=(half?S.proj.h/2:S.proj.h)|0;
   const br=clamp(W*H*S.proj.fps*q,8e5,6e7);
-  $('expInfo').textContent=`≈ ${(br/1e6).toFixed(1)} Mbit/s · ${fmtT(totalDur())} · anslået ${((br/8*totalDur())/1048576).toFixed(0)} MB`;
+  const mb=br/8*totalDur()/1048576;
+  $('expInfo').textContent=`≈ ${(br/1e6).toFixed(1)} Mbit/s · ${fmtT(totalDur())} · anslået ${mb<1?Math.max(1,Math.round(mb*1024))+' KB':mb.toFixed(mb<10?1:0)+' MB'}`;
 }
 $('expQ').onchange=updateExpInfo;$('expRes').onchange=updateExpInfo;
 $('expCancel').onclick=()=>{
   if(expRunning){expCancelled=true;$('progTxt').textContent='Annullerer…'}
-  else $('modalBack').classList.remove('open');
+  else closeExpModal();
 };
 $('expGo').onclick=async()=>{
   const fmt=$('expFmt').value,q=+$('expQ').value,half=$('expRes').value!=='proj';
@@ -1634,7 +1747,7 @@ $('expGo').onclick=async()=>{
     console.error('Eksport fejlede:',err);
     toast('Eksport fejlede: '+(err&&err.message||err),'err');
   }
-  expRunning=false;$('modalBack').classList.remove('open');
+  expRunning=false;closeExpModal();
   seekTo(savedT);
 };
 function setProg(p,txt){
@@ -1748,51 +1861,58 @@ async function exportMP4(q,half,prog,noSave){
     if(encErr)throw encErr;
   };
   let acc=0;
-  for(let i=0;i<S.clips.length&&!expCancelled;i++){
-    const c=S.clips[i],start=acc,d=clipDur(c);acc+=d;
-    const it=fileOf(c);if(!it)continue;
-    if(c.type==='image'){
-      const n=Math.max(1,Math.round(d*fps));
-      for(let k=0;k<n&&!expCancelled;k++){
-        const local=k/fps;
-        await pushFrame(start+local,{i,c,local,start});
-        if(k%10===0){prog((start+local)/total,`Billede ${i+1}/${S.clips.length}…`);await sleep(0)}
-      }
-    }else{
-      await new Promise((res,rej)=>{
-        let done=false,guard=null;
-        const finish=()=>{if(done)return;done=true;clearTimeout(guard);expVid.pause();res()};
-        const arm=()=>{clearTimeout(guard);guard=setTimeout(finish,5000)};
-        expVid.src=it.url;expVid.load();expVid.playbackRate=clamp(c.speed,0.0625,16);
-        arm();
-        expVid.onerror=()=>rej(new Error('Klippet kan ikke afkodes: '+it.name));
-        expVid.onended=finish;
-        const onFrame=async(now,md)=>{
-          if(done)return;
+  try{
+    for(let i=0;i<S.clips.length&&!expCancelled;i++){
+      const c=S.clips[i],start=acc,d=clipDur(c);acc+=d;
+      const it=fileOf(c);if(!it)continue;
+      if(c.type==='image'){
+        const n=Math.max(1,Math.round(d*fps));
+        for(let k=0;k<n&&!expCancelled;k++){
+          const local=k/fps;
+          await pushFrame(start+local,{i,c,local,start});
+          if(k%10===0){prog((start+local)/total,`Billede ${i+1}/${S.clips.length}…`);await sleep(0)}
+        }
+      }else{
+        await new Promise((res,rej)=>{
+          let done=false,guard=null;
+          const finish=()=>{if(done)return;done=true;clearTimeout(guard);expVid.pause();res()};
+          const arm=()=>{clearTimeout(guard);guard=setTimeout(finish,5000)};
+          expVid.src=it.url;expVid.load();expVid.playbackRate=clamp(c.speed,0.0625,16);
           arm();
-          const mt=md.mediaTime;
-          if(mt>=c.out-0.001){finish();return}
-          if(mt>=c.in-0.02){
-            const local=clamp((mt-c.in)/c.speed,0,d);
-            try{await pushFrame(start+local,{i,c,local,start})}catch(e){done=true;rej(e);return}
-            prog((start+local)/total,`Klip ${i+1}/${S.clips.length} · ${fmtT(start+local)} / ${fmtT(total)}`);
-          }
-          if(expCancelled){finish();return}
-          expVid.requestVideoFrameCallback(onFrame);
-        };
-        expVid.onloadedmetadata=()=>{expVid.currentTime=clamp(c.in,0,Math.max(0,(it.dur||1)-0.01))};
-        expVid.onseeked=async()=>{
-          expVid.onseeked=null;arm();
-          expVid.requestVideoFrameCallback(onFrame);
-          try{await expVid.play()}catch(e){rej(e)}
-        };
-      });
+          expVid.onerror=()=>rej(new Error('Klippet kan ikke afkodes: '+it.name));
+          expVid.onended=finish;
+          const onFrame=async(now,md)=>{
+            if(done)return;
+            arm();
+            const mt=md.mediaTime;
+            if(mt>=c.out-0.001){finish();return}
+            if(mt>=c.in-0.02){
+              const local=clamp((mt-c.in)/c.speed,0,d);
+              try{await pushFrame(start+local,{i,c,local,start})}catch(e){done=true;rej(e);return}
+              prog((start+local)/total,`Klip ${i+1}/${S.clips.length} · ${fmtT(start+local)} / ${fmtT(total)}`);
+            }
+            if(expCancelled){finish();return}
+            expVid.requestVideoFrameCallback(onFrame);
+          };
+          expVid.onloadedmetadata=()=>{expVid.currentTime=clamp(c.in,0,Math.max(0,(it.dur||1)-0.01))};
+          expVid.onseeked=async()=>{
+            expVid.onseeked=null;arm();
+            expVid.requestVideoFrameCallback(onFrame);
+            try{await expVid.play()}catch(e){rej(e)}
+          };
+        });
+      }
     }
+    if(encErr)throw encErr;
+    if(expCancelled)return null;
+    prog(0.99,'Afslutter fil…');
+    await venc.flush();
+  }finally{
+    /* Også ved fejl og annullering: slip encoderen (close() på en lukket encoder
+       kaster) og video-elementets blob-URL. */
+    try{venc.close()}catch(e){}
+    expVid.pause();expVid.removeAttribute('src');expVid.load();
   }
-  if(encErr)throw encErr;
-  if(expCancelled){try{venc.close()}catch(e){};return null}
-  prog(0.99,'Afslutter fil…');
-  await venc.flush();venc.close();
   muxer.finalize();
   const blob=new Blob([target.buffer],{type:'video/mp4'});
   return blob;
@@ -1823,17 +1943,21 @@ function exportWebM(q,prog){
     if(!MediaRecorder.isTypeSupported(mime))mime='video/webm';
     const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:br,audioBitsPerSecond:192000});
     const chunks=[];
-    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-    rec.onerror=e=>rej(e.error||new Error('Optagelse fejlede'));
-    rec.onstop=()=>{clearInterval(iv);S.masterVol=savedVol;$('masterVol').value=savedVol;res(new Blob(chunks,{type:'video/webm'}))};
     const savedVol=S.masterVol;S.masterVol=1;
-    seekTo(0);
-    setTimeout(()=>{play();rec.start(250)},250);
     const iv=setInterval(()=>{
+      if(rec.state==='inactive')return;
       prog(S.t/total,`Optager i realtid · ${fmtT(S.t)} / ${fmtT(total)}`);
       if(expCancelled){pause();rec.stop()}
       else if(!S.playing&&S.t>=total-0.05)rec.stop();
     },200);
+    /* Rydder op ved både stop og fejl. Kun canvas-sporet stoppes: lydsporene
+       tilhører den delte g.dest og skal leve videre til næste eksport. */
+    const stopAll=()=>{clearInterval(iv);stream.getVideoTracks().forEach(t=>t.stop());S.masterVol=savedVol;$('masterVol').value=savedVol};
+    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+    rec.onerror=e=>{stopAll();rej(e.error||new Error('Optagelse fejlede'))};
+    rec.onstop=()=>{stopAll();res(new Blob(chunks,{type:'video/webm'}))};
+    seekTo(0);
+    setTimeout(()=>{play();rec.start(250)},250);
   });
 }
 </script>
@@ -1897,22 +2021,56 @@ function netBadgeUpdate(){
   renderTL();renderInsp();
   netBadgeUpdate();
   if(!window.showDirectoryPicker)console.warn('showDirectoryPicker utilgængelig — bruger mappe-input fallback');
-  if(!window.showDirectoryPicker||!window.VideoEncoder){
+  /* Bannere ligger i egen grid-række (2) under værktøjslinjen i stedet for
+     fixed, så de ikke lægger sig over panelhovederne. #notices oprettes
+     først når der er et banner at vise; tom række = 0px. */
+  function notice(id,icon,text,onClose){
+    let wrap=$('notices');
+    if(!wrap){wrap=document.createElement('div');wrap.id='notices';document.body.insertBefore(wrap,$('main'));}
     const b=document.createElement('div');
-    b.id='capBanner';
-    b.style.cssText='position:fixed;top:46px;left:0;right:0;z-index:50;background:var(--gt-sub-1);border-bottom:1px solid var(--gt-warn);color:var(--gt-warn-ink);font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:10px';
-    b.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px">'+ICO('warning')+'Din browser understøtter ikke alle funktioner (mappevalg / MP4-eksport) — fuld funktionalitet kræver Chrome eller Edge.</span>';
+    b.id=id;
+    b.style.cssText='background:var(--gt-sub-1);border-bottom:1px solid var(--gt-warn);color:var(--gt-warn-ink);font-size:12px;padding:5px 12px;display:flex;align-items:center;gap:10px';
+    b.innerHTML='<span style="display:inline-flex;align-items:center;gap:6px">'+ICO(icon)+text+'</span>';
     const x=document.createElement('button');
     x.innerHTML=ICO('close');x.title='Luk';x.setAttribute('aria-label','Luk');
-    x.style.cssText='margin-left:auto;background:none;border:none;color:inherit;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;border-radius:var(--gt-r-1)';
-    x.onclick=()=>b.remove();
+    x.style.cssText='margin-left:auto;padding:6px;background:none;border:none;color:inherit;cursor:pointer;font-size:13px;display:inline-flex;align-items:center;border-radius:var(--gt-r-1)';
+    x.onclick=()=>{b.remove();if(onClose)onClose()};
     b.appendChild(x);
-    document.body.appendChild(b);
+    wrap.appendChild(b);
   }
+  if(!window.showDirectoryPicker||!window.VideoEncoder){
+    notice('capBanner','warning','Din browser understøtter ikke alle funktioner (mappevalg / MP4-eksport) — fuld funktionalitet kræver Chrome eller Edge.');
+  }
+  /* Under 700px panorerer hele skallen (body min-width 1100px, se CSS).
+     Ét diskret banner siger det; lukket = husket pr. version i localStorage. */
+  const NARROW_KEY='mediestudio_narrow_v1';
+  /* matchMedia og ikke innerWidth: på en telefon vokser layout-viewporten til
+     body's min-width (innerWidth = 1101), mens media-forespørgslen ser skærmen. */
+  const narrowMQ=matchMedia('(max-width:699px)');
+  let narrowShown=false;
+  function narrowCheck(){
+    if(narrowShown||!narrowMQ.matches)return;
+    let seen=null;try{seen=localStorage.getItem(NARROW_KEY)}catch(e){}
+    if(seen)return;
+    narrowShown=true;
+    notice('narrowBanner','warning','Bedst på en skærm over 1100 px. Panorér vandret for at nå hele værktøjet.',()=>{try{localStorage.setItem(NARROW_KEY,'1')}catch(e){}});
+    /* Følg panoreringen: html scroller på desktop, visualViewport på telefon. */
+    const vv=window.visualViewport;
+    const sync=()=>{const nb=$('narrowBanner');if(!nb)return;
+      nb.style.transform='translateX('+Math.round(window.scrollX+(vv?vv.offsetLeft:0))+'px)';
+      if(vv)nb.style.maxWidth=Math.round(vv.width)+'px'};
+    addEventListener('scroll',sync,{passive:true});
+    if(vv){vv.addEventListener('scroll',sync);vv.addEventListener('resize',sync)}
+    sync();
+  }
+  narrowCheck();
+  narrowMQ.addEventListener('change',narrowCheck);
   if('serviceWorker' in navigator&&location.protocol==='https:'){
     navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW-registrering fejlede',e));
   }
   requestAnimationFrame(()=>{drawRuler();invalidate()});
+  /* Linealen tegnes i UI-fonten; tegn igen når den er hentet. */
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawRuler);
   if(location.search.includes('selftest'))setTimeout(selftest,300);
 })();
 </script>
