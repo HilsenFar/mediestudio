@@ -1,5 +1,5 @@
 /* MedieStudio service worker — cache-first app shell */
-const VERSION = 'mediestudio-v3';
+const VERSION = 'mediestudio-v4';
 const SHELL = [
   './',
   './index.html',
