@@ -505,7 +505,10 @@ textarea:focus-visible,
       <div class="row"><label>Format</label><select id="expFmt"></select></div>
       <div class="row"><label>Opløsning</label><select id="expRes">
         <option value="proj">Som projekt</option>
-        <option value="0.5">Halv størrelse</option>
+        <option value="half">Halv størrelse</option>
+        <option value="1080x1920">TikTok / Reels / Shorts · 1080×1920</option>
+        <option value="1920x1080">YouTube · 1920×1080</option>
+        <option value="1080x1080">Kvadrat · 1080×1080</option>
       </select></div>
       <div class="row"><label>Kvalitet</label><select id="expQ">
         <option value="0.16">Høj</option>
@@ -791,16 +794,39 @@ function addClipFromFile(it,atIndex){
   if(atIndex==null)atIndex=S.clips.length;
   S.clips.splice(atIndex,0,c);
   if(S.clips.length===1&&!S.projManual)adoptProjectSize(it);
+  else if(S.clips.length===1&&it.w&&it.h&&orientOf(it.w,it.h)!==orientOf(S.proj.w,S.proj.h)){
+    /* Manuelt valgt format, men første klip vender anderledes: spørg. */
+    toast(`Klippet er ${ORIENT_TXT[orientOf(it.w,it.h)]}, projektet er ${ORIENT_TXT[orientOf(S.proj.w,S.proj.h)]} (${S.proj.w}×${S.proj.h}).`,'',
+      {action:{label:'Skift til klippets format',fn:()=>{S.projManual=false;adoptProjectSize(it);markDirty('format');renderInsp()}}});
+  }
   select('clip',c.id);
   renderTL();markDirty('tilføj klip');
   $('stageHint').style.display='none';
   if(S.clips.length===1)seekTo(0);
 }
+/* Standardformater (højst 1920 på den lange led). Et klip i en skæv
+   størrelse (AI-klip: 640×368, 832×480, 1280×736, 1920×1104) giver et
+   projekt i nærmeste standard med samme billedformat (±6 %) og nærmeste
+   højde — 1280×736 → 1280×720 — i stedet for at kopiere den skæve størrelse. */
+const STD_LAND=[[1920,1080],[1280,720],[960,540],[854,480],[640,360],[1440,1080],[1024,768],[640,480]];
+const STD_SIZES=[...STD_LAND,...STD_LAND.map(([w,h])=>[h,w]),[1080,1080],[720,720],[480,480],[1080,1350]];
+function snapStdSize(w,h){
+  const a=w/h;let best=null,bd=Infinity;
+  for(const[sw,sh]of STD_SIZES){
+    if(Math.abs(Math.log(sw/sh/a))>0.06)continue;
+    const d=Math.abs(Math.log(sh/h));
+    if(d<bd){bd=d;best=[sw,sh]}
+  }
+  return best;
+}
+const orientOf=(w,h)=>w>h*1.05?'land':h>w*1.05?'port':'sq';
+const ORIENT_TXT={land:'liggende',port:'lodret',sq:'kvadratisk'};
 function adoptProjectSize(it){
   let w=it.w,h=it.h;
   if(!w||!h)return;
-  const long=Math.max(w,h);
-  if(long>1920){const sc=1920/long;w=Math.round(w*sc);h=Math.round(h*sc)}
+  const std=snapStdSize(w,h);
+  if(std){[w,h]=std}
+  else{const long=Math.max(w,h);if(long>1920){const sc=1920/long;w=Math.round(w*sc);h=Math.round(h*sc)}}
   S.proj.w=w-(w%2);S.proj.h=h-(h%2);
   applyProjSize();
 }
@@ -1611,14 +1637,27 @@ function inspProject(B){
   }
   const s1=sec(B,'Format');
   const resSel=el('select');
-  const RES=[['1080x1920','1080×1920 · Lodret 9:16'],['1920x1080','1920×1080 · Bred 16:9'],['1080x1080','1080×1080 · Kvadrat'],['720x1280','720×1280 · Lodret let'],['1280x720','1280×720 · Bred let']];
+  /* "Automatisk" er standard: projektet følger første klip (snappet til
+     nærmeste standardformat). Et rigtigt format låser projektet (projManual). */
+  const RES=[['auto',`Automatisk (følg første klip) · nu ${S.proj.w}×${S.proj.h}`],['1080x1920','1080×1920 · Lodret 9:16'],['1920x1080','1920×1080 · Bred 16:9'],['1080x1080','1080×1080 · Kvadrat'],['1080x1350','1080×1350 · Lodret 4:5'],['720x1280','720×1280 · Lodret let'],['1280x720','1280×720 · Bred let']];
   let match=false;
-  for(const[v,t]of RES){const o=el('option',null,t);o.value=v;if(v===`${S.proj.w}x${S.proj.h}`){o.selected=true;match=true}resSel.appendChild(o)}
-  const oc=el('option',null,`Nuværende: ${S.proj.w}×${S.proj.h}`);oc.value='cur';if(!match)oc.selected=true;resSel.appendChild(oc);
+  for(const[v,t]of RES){
+    const o=el('option',null,t);o.value=v;
+    if(!match&&(v==='auto'?!S.projManual:S.projManual&&v===`${S.proj.w}x${S.proj.h}`)){o.selected=true;match=true}
+    resSel.appendChild(o);
+  }
+  if(!match){const oc=el('option',null,`Nuværende: ${S.proj.w}×${S.proj.h}`);oc.value='cur';oc.selected=true;resSel.appendChild(oc)}
   resSel.onchange=()=>{
     if(resSel.value==='cur')return;
-    const[w,h]=resSel.value.split('x').map(Number);
-    S.proj.w=w;S.proj.h=h;S.projManual=true;applyProjSize();markDirty('format');
+    if(resSel.value==='auto'){
+      S.projManual=false;
+      const first=S.clips.map(fileOf).find(Boolean);
+      if(first)adoptProjectSize(first);else applyProjSize();
+    }else{
+      const[w,h]=resSel.value.split('x').map(Number);
+      S.proj.w=w;S.proj.h=h;S.projManual=true;applyProjSize();
+    }
+    markDirty('format');renderInsp();
   };
   const rr=row('Opløsning');rr.appendChild(resSel);s1.appendChild(rr);
   selBox(s1,'Billeder/sek',S.proj,'fps',['24','25','30','50','60'],v=>{S.proj.fps=+v;applyProjSize();markDirty('billeder/sek')});
@@ -1956,6 +1995,9 @@ $('btnExport').onclick=()=>{
   const f=$('expFmt');f.innerHTML='';
   if(canMp4())f.appendChild(new Option('MP4 · H.264 (anbefalet)','mp4'));
   f.appendChild(new Option('WebM · VP9 (virker offline)','webm'));
+  const r=$('expRes');
+  r.options[0].textContent=`Som projekt · ${S.proj.w&~1}×${S.proj.h&~1}`;
+  r.options[1].textContent=`Halv størrelse · ${expSize('half').join('×')}`;
   updateExpInfo();
   $('expOpts').style.display='block';$('expProg').style.display='none';
   $('expGo').style.display='';   /* '' og ikke 'inline-block': .sbtn er nu inline-flex (fælles knapbase) */
@@ -1970,11 +2012,13 @@ function closeExpModal(){
   if(p&&p.isConnected&&typeof p.focus==='function')p.focus();
 }
 function updateExpInfo(){
-  const q=+$('expQ').value,half=$('expRes').value!=='proj';
-  const W=(half?S.proj.w/2:S.proj.w)|0,H=(half?S.proj.h/2:S.proj.h)|0;
+  const q=+$('expQ').value,spec=$('expRes').value;
+  const[W,H]=expSize(spec);
   const br=clamp(W*H*S.proj.fps*q,8e5,6e7);
   const mb=br/8*totalDur()/1048576;
-  $('expInfo').textContent=`≈ ${(br/1e6).toFixed(1)} Mbit/s · ${fmtT(totalDur())} · anslået ${mb<1?Math.max(1,Math.round(mb*1024))+' KB':mb.toFixed(mb<10?1:0)+' MB'}`;
+  const other=Math.abs(Math.log((W/H)/(S.proj.w/S.proj.h)))>0.02;
+  $('expInfo').textContent=`${W}×${H} · ≈ ${(br/1e6).toFixed(1)} Mbit/s · ${fmtT(totalDur())} · anslået ${mb<1?Math.max(1,Math.round(mb*1024))+' KB':mb.toFixed(mb<10?1:0)+' MB'}`+
+    (other?` — andet billedformat end projektet (${S.proj.w}×${S.proj.h}): klippene fyldes/tilpasses på ny, og tekster flytter sig relativt.`:'');
 }
 $('expQ').onchange=updateExpInfo;$('expRes').onchange=updateExpInfo;
 $('expCancel').onclick=()=>{
@@ -1982,7 +2026,7 @@ $('expCancel').onclick=()=>{
   else closeExpModal();
 };
 $('expGo').onclick=async()=>{
-  const fmt=$('expFmt').value,q=+$('expQ').value,half=$('expRes').value!=='proj';
+  const fmt=$('expFmt').value,q=+$('expQ').value,size=$('expRes').value;
   if(fmt==='webm'&&(document.hidden||!document.hasFocus())){
     const ok=confirm('ADVARSEL: WebM-eksport optager i realtid og kræver at vinduet er synligt og i fokus under hele eksporten. Vinduet ser ikke ud til at være i fokus lige nu — eksporten kan give en fejlbehæftet fil.\n\nKlik OK for at fortsætte alligevel, eller Annuller og klik i vinduet først.');
     if(!ok)return;
@@ -1992,7 +2036,7 @@ $('expGo').onclick=async()=>{
   expCancelled=false;expRunning=true;pause();
   const savedT=S.t;
   try{
-    const blob=fmt==='mp4'?await exportMP4(q,half,setProg):await exportWebM(q,setProg,half);
+    const blob=fmt==='mp4'?await exportMP4(q,size,setProg):await exportWebM(q,setProg,size);
     if(blob&&!expCancelled){
       const ext=fmt==='mp4'?'.mp4':'.webm';
       await saveBlob(blob,($('projName').value||'video')+ext,[{description:'Video',accept:{[fmt==='mp4'?'video/mp4':'video/webm']:[ext]}}]);
@@ -2014,8 +2058,17 @@ document.addEventListener('visibilitychange',()=>{
 });
 
 /* ---------- Fælles: eksport-canvas ---------- */
-function makeExpCanvas(half){
-  const W=((half?S.proj.w/2:S.proj.w)|0)&~1,H=((half?S.proj.h/2:S.proj.h)|0)&~1;
+/* Eksportstørrelse: 'proj' | 'half' (eller true) | 'BxH' (platform-preset).
+   Et andet billedformat end projektets tegnes på ny: klip fyldes/tilpasses
+   efter deres Tilpasning, og tekster placeres relativt (x/y i %). */
+function expSize(spec){
+  if(spec===true||spec==='half')return[((S.proj.w/2)|0)&~1,((S.proj.h/2)|0)&~1];
+  const m=/^(\d+)x(\d+)$/.exec(spec||'');
+  if(m)return[+m[1]&~1,+m[2]&~1];
+  return[S.proj.w&~1,S.proj.h&~1];
+}
+function makeExpCanvas(spec){
+  const[W,H]=expSize(spec);
   const ecv=document.createElement('canvas');ecv.width=W;ecv.height=H;
   return{ecv,ectx:ecv.getContext('2d',{willReadFrequently:false}),W,H};
 }
@@ -2065,9 +2118,9 @@ async function buildMasterAudio(total){
   if(!any)return null;
   return await oc.startRendering();
 }
-async function exportMP4(q,half,prog,noSave){
+async function exportMP4(q,size,prog,noSave){
   if(!canMp4())throw new Error(window.Mp4Muxer?'WebCodecs (VideoEncoder) er ikke tilgængelig i denne browser — brug WebM':'MP4-modulet (mp4-muxer.min.js) kunne ikke indlæses — brug WebM');
-  const{ecv,ectx,W,H}=makeExpCanvas(half);
+  const{ecv,ectx,W,H}=makeExpCanvas(size);
   const fps=S.proj.fps,total=totalDur(),br=clamp(W*H*fps*q,8e5,6e7);
   const vcfg=await pickAvc(W,H,fps,br);
   if(!vcfg)throw new Error('H.264-encoder ikke tilgængelig — brug WebM');
@@ -2251,10 +2304,10 @@ function ensureAudioGraph(){
 /* WebM optager i realtid fra preview-motoren. Er eksportstørrelsen en anden
    end projektets, tegner tick() hvert billede ind i et eget lærred (webmCtx)
    som optages i stedet for #cv. */
-function exportWebM(q,prog,half){
+function exportWebM(q,prog,size){
   return new Promise((res,rej)=>{
     const total=totalDur(),fps=S.proj.fps;
-    const{ecv,ectx,W,H}=makeExpCanvas(half);
+    const{ecv,ectx,W,H}=makeExpCanvas(size);
     const own=W!==cv.width||H!==cv.height;
     const br=clamp(W*H*fps*q,8e5,4e7);
     const g=ensureAudioGraph();
