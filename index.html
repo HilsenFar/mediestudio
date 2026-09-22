@@ -318,6 +318,8 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
 #progBar{height:8px;background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-1);overflow:hidden;margin:8px 0 4px;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 #progFill{height:100%;width:0%;background:linear-gradient(90deg,var(--gt-sig-dk),var(--gt-sig));transition:width .15s var(--gt-ease-soft)}
 #progTxt{font-size:11px;color:var(--dim)}
+#expWarn{margin-top:10px;font-size:12px;line-height:1.5;color:var(--gt-warn-ink);display:flex;gap:6px;align-items:flex-start}
+#expWarn .gi{flex:none;margin-top:2px}
 #toasts{position:fixed;bottom:34px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:6px;align-items:center}
 .toast{background:linear-gradient(180deg,var(--gt-pl-3),var(--gt-pl-2));border:1px solid var(--gt-edge-bezel);border-radius:var(--gt-r-3);padding:7px 16px;box-shadow:var(--gt-e-3);font-size:12.5px;animation:tin var(--gt-d-3) var(--gt-ease-out)}
 .toast.err{border-color:var(--err);color:var(--err)}
@@ -515,6 +517,7 @@ textarea:focus-visible,
     <div id="expProg">
       <div id="progBar"><div id="progFill"></div></div>
       <div id="progTxt">Forbereder…</div>
+      <div id="expWarn"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg> Hold vinduet synligt under eksporten. Skjules eller dækkes det, holder eksporten pause og fortsætter når du viser det igen.</div>
     </div>
     <div class="btnRow" style="margin-top:14px;justify-content:flex-end;display:flex">
       <button class="sbtn" id="expCancel">Annuller</button>
@@ -809,13 +812,13 @@ function applyProjSize(){
    KOMPOSITOR — tegner ét billede af tidslinjen (preview OG eksport)
    ================================================================ */
 const cv=$('cv'),ctx=cv.getContext('2d');
-function fxFilter(fx){
-  const p=[];
+function fxFilter(fx,k){
+  const p=[];k=k||1;
   if(fx.bright!==1)p.push(`brightness(${fx.bright})`);
   if(fx.contrast!==1)p.push(`contrast(${fx.contrast})`);
   if(fx.sat!==1)p.push(`saturate(${fx.sat})`);
   if(fx.hue)p.push(`hue-rotate(${fx.hue}deg)`);
-  if(fx.blur)p.push(`blur(${fx.blur}px)`);
+  if(fx.blur)p.push(`blur(${+(fx.blur*k).toFixed(2)}px)`);
   if(fx.gray)p.push(`grayscale(${fx.gray})`);
   if(fx.sepia)p.push(`sepia(${fx.sepia})`);
   if(fx.invert)p.push(`invert(${fx.invert})`);
@@ -867,6 +870,9 @@ function drawFrame(t,c2,opts){
   opts=opts||{};
   const W=c2.canvas.width,H=c2.canvas.height;
   const sFac=Math.min(W,H)/1080; // tekst skaleres efter korteste side
+  /* Sløring i pixels følger eksportens størrelse i forhold til projektet
+     (1 i preview, 0,5 i halv størrelse), så looket er det samme. */
+  const bFac=Math.min(W,H)/Math.max(1,Math.min(S.proj.w,S.proj.h));
   c2.save();
   c2.fillStyle=S.proj.bg;c2.fillRect(0,0,W,H);
   const ca=opts.ca||clipAt(t);
@@ -890,7 +896,7 @@ function drawFrame(t,c2,opts){
       }
       const dw=sw*scale,dh=sh*scale;
       c2.save();
-      c2.filter=fxFilter(c.fx);
+      c2.filter=fxFilter(c.fx,bFac);
       c2.globalAlpha=fadeGain(c,ca.local);
       try{c2.drawImage(src,(W-dw)/2+ox,(H-dh)/2+oy,dw,dh)}catch(e){}
       c2.restore();
@@ -952,7 +958,12 @@ function drawFrame(t,c2,opts){
    AFSPILNINGSMOTOR — A/B videoelementer, gapless-ish, realtid
    ================================================================ */
 const vA=document.createElement('video'),vB=document.createElement('video');
-for(const v of[vA,vB]){v.preload='auto';v.crossOrigin='anonymous';v.playsInline=true;v._fid=null}
+/* preservesPitch=false: ved hastighed ≠ 1 skifter tonehøjden i preview og
+   WebM præcis som i MP4-miksningen (AudioBufferSourceNode.playbackRate
+   resampler). Det er den eneste vej hvor alle tre lyder ens uden at flytte
+   preview-lyden over i Web Audio. */
+for(const v of[vA,vB]){v.preload='auto';v.crossOrigin='anonymous';v.playsInline=true;v._fid=null;v.preservesPitch=false;v.webkitPreservesPitch=false}
+let webmCtx=null;   /* sat under WebM-eksport i anden størrelse end projektet */
 let vActive=vA,vNext=vB,curIdx=-1,lastWall=0,needsDraw=true,seekBusy=false,seekPend=null,seekGuard=null;
 function invalidate(){needsDraw=true}
 function vidElFor(c){return vActive._cid===c.id?vActive:(vNext._cid===c.id?vNext:vActive)}
@@ -1050,6 +1061,7 @@ function tick(now){
   if(needsDraw){
     needsDraw=S.playing;
     drawFrame(S.t,ctx);
+    if(webmCtx)drawFrame(S.t,webmCtx);
     updateTimeUI();
   }
 }
@@ -1427,7 +1439,7 @@ function inspClip(B,c){
     num(s1,'Ind (s)',c,'in',0,it?it.dur:1e5,0.01,{tl:1,cb:()=>{c.in=Math.min(c.in,c.out-0.08)}});
     num(s1,'Ud (s)',c,'out',0.05,it?it.dur:1e5,0.01,{tl:1,cb:()=>{c.out=Math.max(c.out,c.in+0.08)}});
     rng(s1,'Hastighed',c,'speed',0.25,4,0.05,{tl:1,fmt:x=>x+'×'});
-    rng(s1,'Lydstyrke',c,'volume',0,2,0.01,{fmt:x=>Math.round(x*100)+'%'});
+    rng(s1,'Lydstyrke',c,'volume',0,1,0.01,{fmt:x=>Math.round(x*100)+'%'});
   }else{
     num(s1,'Varighed (s)',c,'imgDur',0.2,600,0.1,{tl:1,cb:()=>{c.out=c.imgDur}});
   }
@@ -1661,7 +1673,7 @@ function applyProject(p,opts){
     const cl={
       id:uid(),fid:f?f.id:null,type,
       in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f&&f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
-      speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,2),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
+      speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'?'contain':'cover',
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
       kb:kb?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),px:num(kb.px,0,-1,1),py:num(kb.py,0,-1,1)}:undefined
@@ -1951,7 +1963,7 @@ $('expGo').onclick=async()=>{
   expCancelled=false;expRunning=true;pause();
   const savedT=S.t;
   try{
-    const blob=fmt==='mp4'?await exportMP4(q,half,setProg):await exportWebM(q,setProg);
+    const blob=fmt==='mp4'?await exportMP4(q,half,setProg):await exportWebM(q,setProg,half);
     if(blob&&!expCancelled){
       const ext=fmt==='mp4'?'.mp4':'.webm';
       await saveBlob(blob,($('projName').value||'video')+ext,[{description:'Video',accept:{[fmt==='mp4'?'video/mp4':'video/webm']:[ext]}}]);
@@ -1964,11 +1976,12 @@ $('expGo').onclick=async()=>{
   seekTo(savedT);
 };
 function setProg(p,txt){
-  $('progFill').style.width=(clamp(p,0,1)*100).toFixed(1)+'%';
-  $('progTxt').textContent=txt+' — hold vinduet synligt under eksporten';
+  if(p!=null)$('progFill').style.width=(clamp(p,0,1)*100).toFixed(1)+'%';
+  $('progTxt').textContent=txt;
 }
+const HIDDEN_MSG='Pause — vinduet er skjult. Vis vinduet igen, så fortsætter eksporten.';
 document.addEventListener('visibilitychange',()=>{
-  if(expRunning&&document.hidden)toast('Advarsel: Vinduet er skjult — eksporten kan gå i stå eller give en fejlbehæftet fil. Skift tilbage til dette vindue.','err');
+  if(expRunning&&document.hidden)toast('Eksporten holder pause mens vinduet er skjult — skift tilbage til dette vindue for at fortsætte.','err');
 });
 
 /* ---------- Fælles: eksport-canvas ---------- */
@@ -1988,8 +2001,10 @@ async function pickAvc(W,H,fps,br){
 }
 async function buildMasterAudio(total){
   const sr=48000;
-  const oc=new OfflineAudioContext(2,Math.ceil(total*sr)+sr,sr);
-  const cache=new Map();let any=false;
+  /* Præcis tidslinjens længde — før +1 s, som gav hver MP4 med lyd et
+     frosset sekund til sidst (mp4-muxer tager filens længde fra det længste spor). */
+  const oc=new OfflineAudioContext(2,Math.max(1,Math.round(total*sr)),sr);
+  const cache=new Map(),readFail=new Set();let any=false;
   let acc=0;
   for(const c of S.clips){
     const start=acc;acc+=clipDur(c);
@@ -1997,20 +2012,27 @@ async function buildMasterAudio(total){
     const it=fileOf(c);if(!it)continue;
     let buf=cache.get(it.id);
     if(buf===undefined){
-      try{buf=await oc.decodeAudioData(await it.file.arrayBuffer())}catch(e){buf=null}
+      let ab=null;buf=null;
+      try{ab=await it.file.arrayBuffer()}catch(e){console.warn('Lydfil kunne ikke læses',it.name,e);readFail.add(it.name)}
+      /* Afkodningsfejl = intet lydspor, det normale for AI-klip; ingen besked. */
+      if(ab){try{buf=await oc.decodeAudioData(ab)}catch(e){buf=null}}
       cache.set(it.id,buf);
     }
     if(!buf)continue;
     any=true;
     const src=oc.createBufferSource();src.buffer=buf;src.playbackRate.value=c.speed;
-    const g=oc.createGain(),base=clamp(c.volume,0,2),d=clipDur(c);
-    const t0=start,t1=start+d;
-    g.gain.setValueAtTime(c.fadeIn>0?0.0001:base,t0);
-    if(c.fadeIn>0)g.gain.linearRampToValueAtTime(base,Math.min(t0+c.fadeIn,t1));
-    if(c.fadeOut>0){g.gain.setValueAtTime(base,Math.max(t0,t1-c.fadeOut));g.gain.linearRampToValueAtTime(0.0001,t1)}
+    const g=oc.createGain(),base=clamp(c.volume,0,1),d=clipDur(c);
+    /* Fades: samme kurve som preview og billedet (fadeGain), som eneste
+       automations-hændelse på noden. */
+    if(c.fadeIn>0||c.fadeOut>0){
+      const K=64,curve=new Float32Array(K);
+      for(let k=0;k<K;k++)curve[k]=base*fadeGain(c,k*d/(K-1));
+      g.gain.setValueCurveAtTime(curve,start,d);
+    }else g.gain.value=base;
     src.connect(g).connect(oc.destination);
-    src.start(t0,clamp(c.in,0,buf.duration),Math.max(0.01,c.out-c.in));
+    src.start(start,clamp(c.in,0,buf.duration),Math.max(0.01,c.out-c.in));
   }
+  if(readFail.size)toast(`Lyden fra ${[...readFail].slice(0,3).join(', ')} kunne ikke læses — de klip eksporteres uden lyd`,'err');
   if(!any)return null;
   return await oc.startRendering();
 }
@@ -2032,7 +2054,9 @@ async function exportMP4(q,half,prog,noSave){
   }
   const target=new Mp4Muxer.ArrayBufferTarget();
   const muxer=new Mp4Muxer.Muxer({
-    target,fastStart:'in-memory',firstTimestampBehavior:'offset',
+    /* Lyd starter altid i 0, og første videobillede tvinges til 0 (pushFrame),
+       så sporene flugter; cross-track-offset bevarer den indbyrdes afstand. */
+    target,fastStart:'in-memory',firstTimestampBehavior:'cross-track-offset',
     video:{codec:'avc',width:W,height:H},
     audio:acfg?{codec:acfg.codec==='opus'?'opus':'aac',sampleRate:48000,numberOfChannels:2}:undefined
   });
@@ -2060,18 +2084,28 @@ async function exportMP4(q,half,prog,noSave){
   }
   /* — video — */
   const expVid=document.createElement('video');expVid.muted=true;expVid.playsInline=true;expVid.preload='auto';
-  let frameIdx=0,lastTs=-1;
-  const keyEvery=fps*2;
-  const pushFrame=async(tlT,caOv)=>{
-    drawFrame(tlT,ectx,caOv?{ca:caOv,videoEl:expVid}:{});
-    let ts=Math.round(tlT*1e6);
-    if(ts<=lastTs)ts=lastTs+Math.round(1e6/fps/2);
-    lastTs=ts;
-    const fr=new VideoFrame(ecv,{timestamp:ts,duration:Math.round(1e6/fps)});
+  let frameIdx=0,lastTs=-1,pend=null;
+  const keyEvery=fps*2,frameUs=Math.round(1e6/fps);
+  /* Hvert billede holdes tilbage til det næste kendes, så dets varighed er
+     den reelle afstand, og det sidste billede slutter præcis ved total. */
+  const encPend=async nextTs=>{
+    if(!pend)return;
+    const p=pend;pend=null;
+    const fr=new VideoFrame(p.fr,{timestamp:p.ts,duration:Math.max(1000,nextTs-p.ts)});
+    p.fr.close();
     venc.encode(fr,{keyFrame:frameIdx%keyEvery===0});
     fr.close();frameIdx++;
     while(venc.encodeQueueSize>6)await sleep(4);
     if(encErr)throw encErr;
+  };
+  const pushFrame=async(tlT,caOv)=>{
+    drawFrame(tlT,ectx,caOv?{ca:caOv,videoEl:expVid}:{});
+    let ts=(frameIdx===0&&!pend)?0:Math.round(tlT*1e6);   /* første billede = 0 */
+    if(ts<=lastTs)ts=lastTs+Math.round(frameUs/2);
+    lastTs=ts;
+    const fr=new VideoFrame(ecv,{timestamp:ts,duration:frameUs});
+    await encPend(ts);
+    pend={fr,ts};
   };
   let acc=0;
   try{
@@ -2087,43 +2121,84 @@ async function exportMP4(q,half,prog,noSave){
           if(k%10===0){prog((start+local)/total,`Billede ${i+1}/${S.clips.length}…`);await sleep(0)}
         }
       }else{
+        /* Videoklip afspilles i realtid, og hvert leveret billede
+           (requestVideoFrameCallback) tidsstemples ud fra dets mediaTime.
+           rVFC kører ikke mens siden er skjult (anden fane, minimeret eller
+           helt dækket vindue): så holdes der pause, og ved visning søges der
+           tilbage til sidst leverede billede. En reel standsning er en fejl —
+           aldrig et stille "færdig" med frosne afsnit. */
         await new Promise((res,rej)=>{
-          let done=false,guard=null;
-          const finish=()=>{if(done)return;done=true;clearTimeout(guard);expVid.pause();res()};
-          const arm=()=>{clearTimeout(guard);guard=setTimeout(finish,5000)};
-          expVid.src=it.url;expVid.load();expVid.playbackRate=clamp(c.speed,0.0625,16);
-          arm();
-          expVid.onerror=()=>rej(new Error('Klippet kan ikke afkodes: '+it.name));
-          expVid.onended=finish;
-          const onFrame=async(now,md)=>{
+          let done=false,guard=null,rv=0,lastMt=-1,paused=false,initPushed=false,cpoll=0;
+          const cleanup=()=>{clearTimeout(guard);clearInterval(cpoll);document.removeEventListener('visibilitychange',onVis);if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}};
+          const finish=()=>{if(done)return;done=true;cleanup();expVid.pause();res()};
+          const fail=e=>{if(done)return;done=true;cleanup();expVid.pause();rej(e)};
+          const arm=()=>{clearTimeout(guard);guard=setTimeout(onStall,5000)};
+          const onStall=()=>{
             if(done)return;
+            if(document.hidden){hide();return}
+            if(expCancelled||expVid.ended||expVid.currentTime>=c.out-0.05){finish();return}
+            fail(new Error(`Klip ${i+1} (${it.name}) gik i stå under eksporten — ingen nye billeder i 5 s`));
+          };
+          const hide=()=>{
+            if(paused||done)return;paused=true;clearTimeout(guard);expVid.pause();
+            if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}
+            prog(null,HIDDEN_MSG);
+            clearInterval(cpoll);cpoll=setInterval(()=>{if(expCancelled)finish()},250);   /* Annuller virker også under pausen */
+          };
+          const startAt=t=>{
+            expVid.onseeked=async()=>{
+              expVid.onseeked=null;
+              if(done)return;
+              if(document.hidden){paused=false;hide();return}
+              if(!initPushed&&expVid.readyState>=2){
+                /* Klippets første billede sættes ind med det samme, så klippet
+                   starter til tiden selv om første rVFC-billede er et hak senere. */
+                initPushed=true;lastMt=c.in;
+                try{await pushFrame(start,{i,c,local:0,start})}catch(e){fail(e);return}
+              }
+              arm();rv=expVid.requestVideoFrameCallback(onFrame);
+              try{await expVid.play()}catch(e){fail(e)}
+            };
+            expVid.currentTime=t;
+          };
+          const onVis=()=>{
+            if(done)return;
+            if(document.hidden)hide();
+            else if(paused){paused=false;clearInterval(cpoll);startAt(lastMt>=0?lastMt:clamp(c.in,0,Math.max(0,(it.dur||1)-0.01)))}
+          };
+          document.addEventListener('visibilitychange',onVis);
+          const onFrame=async(now,md)=>{
+            rv=0;
+            if(done||paused)return;
             arm();
             const mt=md.mediaTime;
             if(mt>=c.out-0.001){finish();return}
-            if(mt>=c.in-0.02){
+            if(mt>lastMt+1e-4&&mt>=c.in-0.02){
+              lastMt=mt;
               const local=clamp((mt-c.in)/c.speed,0,d);
-              try{await pushFrame(start+local,{i,c,local,start})}catch(e){done=true;rej(e);return}
+              try{await pushFrame(start+local,{i,c,local,start})}catch(e){fail(e);return}
               prog((start+local)/total,`Klip ${i+1}/${S.clips.length} · ${fmtT(start+local)} / ${fmtT(total)}`);
             }
             if(expCancelled){finish();return}
-            expVid.requestVideoFrameCallback(onFrame);
+            if(!done&&!paused)rv=expVid.requestVideoFrameCallback(onFrame);
           };
-          expVid.onloadedmetadata=()=>{expVid.currentTime=clamp(c.in,0,Math.max(0,(it.dur||1)-0.01))};
-          expVid.onseeked=async()=>{
-            expVid.onseeked=null;arm();
-            expVid.requestVideoFrameCallback(onFrame);
-            try{await expVid.play()}catch(e){rej(e)}
-          };
+          expVid.onerror=()=>fail(new Error('Klippet kan ikke afkodes: '+it.name));
+          expVid.onended=finish;
+          expVid.onloadedmetadata=()=>{expVid.onloadedmetadata=null;startAt(clamp(c.in,0,Math.max(0,(it.dur||1)-0.01)))};
+          expVid.src=it.url;expVid.load();expVid.playbackRate=clamp(c.speed,0.0625,16);
+          arm();
         });
       }
     }
     if(encErr)throw encErr;
     if(expCancelled)return null;
     prog(0.99,'Afslutter fil…');
+    await encPend(Math.round(total*1e6));
     await venc.flush();
   }finally{
     /* Også ved fejl og annullering: slip encoderen (close() på en lukket encoder
        kaster) og video-elementets blob-URL. */
+    if(pend){try{pend.fr.close()}catch(e){}pend=null}
     try{venc.close()}catch(e){}
     expVid.pause();expVid.removeAttribute('src');expVid.load();
   }
@@ -2144,13 +2219,19 @@ function ensureAudioGraph(){
   audioGraph={ac,dest,master};
   return audioGraph;
 }
-function exportWebM(q,prog){
+/* WebM optager i realtid fra preview-motoren. Er eksportstørrelsen en anden
+   end projektets, tegner tick() hvert billede ind i et eget lærred (webmCtx)
+   som optages i stedet for #cv. */
+function exportWebM(q,prog,half){
   return new Promise((res,rej)=>{
     const total=totalDur(),fps=S.proj.fps;
-    const br=clamp(S.proj.w*S.proj.h*fps*q,8e5,4e7);
+    const{ecv,ectx,W,H}=makeExpCanvas(half);
+    const own=W!==cv.width||H!==cv.height;
+    const br=clamp(W*H*fps*q,8e5,4e7);
     const g=ensureAudioGraph();
     if(g.ac.state==='suspended')g.ac.resume();
-    const stream=cv.captureStream(fps);
+    if(own)webmCtx=ectx;
+    const stream=(own?ecv:cv).captureStream(fps);
     for(const tr of g.dest.stream.getAudioTracks())stream.addTrack(tr);
     let mime='video/webm;codecs=vp9,opus';
     if(!MediaRecorder.isTypeSupported(mime))mime='video/webm;codecs=vp8,opus';
@@ -2158,15 +2239,24 @@ function exportWebM(q,prog){
     const rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:br,audioBitsPerSecond:192000});
     const chunks=[];
     const savedVol=S.masterVol;S.masterVol=1;
+    let hiddenPause=false;
+    /* Skjult vindue: rAF står stille (ingen billeder), mens lyden ville løbe
+       videre. Optagelse og afspilning sættes på pause og fortsætter ved visning. */
+    const onVis=()=>{
+      if(rec.state==='inactive')return;
+      if(document.hidden){if(!hiddenPause&&S.playing){hiddenPause=true;pause();try{rec.pause()}catch(e){}prog(null,HIDDEN_MSG)}}
+      else if(hiddenPause){hiddenPause=false;try{rec.resume()}catch(e){}play()}
+    };
+    document.addEventListener('visibilitychange',onVis);
     const iv=setInterval(()=>{
       if(rec.state==='inactive')return;
-      prog(S.t/total,`Optager i realtid · ${fmtT(S.t)} / ${fmtT(total)}`);
+      if(!hiddenPause)prog(S.t/total,`Optager i realtid · ${fmtT(S.t)} / ${fmtT(total)}`);
       if(expCancelled){pause();rec.stop()}
-      else if(!S.playing&&S.t>=total-0.05)rec.stop();
+      else if(!hiddenPause&&!S.playing&&S.t>=total-0.05)rec.stop();
     },200);
     /* Rydder op ved både stop og fejl. Kun canvas-sporet stoppes: lydsporene
        tilhører den delte g.dest og skal leve videre til næste eksport. */
-    const stopAll=()=>{clearInterval(iv);stream.getVideoTracks().forEach(t=>t.stop());S.masterVol=savedVol;$('masterVol').value=savedVol};
+    const stopAll=()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVis);webmCtx=null;stream.getVideoTracks().forEach(t=>t.stop());S.masterVol=savedVol;$('masterVol').value=savedVol};
     rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
     rec.onerror=e=>{stopAll();rej(e.error||new Error('Optagelse fejlede'))};
     rec.onstop=()=>{stopAll();res(new Blob(chunks,{type:'video/webm'}))};
