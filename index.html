@@ -287,6 +287,10 @@ textarea{width:100%;font-family:var(--gt-font-body);background:var(--gt-void);bo
 .blk .lbl{position:absolute;left:6px;bottom:3px;right:6px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px #000;pointer-events:none}
 .blk .dtag{position:absolute;right:4px;top:2px;font-size:9px;font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1;background:rgba(0,0,0,.55);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
 .blk.clip{background:var(--clip)}
+/* Pladsholder: klippets fil er ikke genfundet endnu. Stiplet fare-kant +
+   striber + "Mangler:" i etiketten, så farve ikke står alene. */
+.blk.clip.missing{background:repeating-linear-gradient(135deg,var(--gt-pl-2) 0 7px,var(--gt-sub-1) 7px 14px);border:1px dashed var(--err)}
+.blk.clip.missing .lbl{color:var(--err)}
 .blk.clip .fxdot{position:absolute;left:5px;top:3px;font-size:9px;display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.55);color:var(--gt-warn-ink);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
 .blk.txt{background:var(--text-blk)}
 .blk.sub{background:var(--sub-blk)}
@@ -539,28 +543,52 @@ const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;'
 const lerp=(a,b,t)=>a+(b-a)*t;
 function fmtT(t,fps){t=Math.max(0,t||0);const m=Math.floor(t/60),s=Math.floor(t%60),f=Math.floor((t%1)*(fps||S.proj.fps));return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}.${String(f).padStart(2,'0')}`}
 function fmtDur(t){return t>=60?`${Math.floor(t/60)}m${Math.round(t%60)}s`:`${(Math.round(t*10)/10)}s`}
-function toast(msg,cls){const d=document.createElement('div');d.className='toast '+(cls||'');d.textContent=msg;d.setAttribute('role',cls==='err'?'alert':'status');$('toasts').appendChild(d);setTimeout(()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)},cls==='err'?5200:2600)}
+/* opts.ms: visningstid · opts.action:{label,fn}: en knap i toasten (så står
+   den længere, 9 s, medmindre ms er sat). */
+function toast(msg,cls,opts){
+  opts=opts||{};
+  const d=document.createElement('div');d.className='toast '+(cls||'');d.setAttribute('role',cls==='err'?'alert':'status');
+  const m=document.createElement('span');m.textContent=msg;d.appendChild(m);
+  const gone=()=>{d.style.opacity='0';d.style.transition='opacity .3s';setTimeout(()=>d.remove(),320)};
+  if(opts.action){
+    const b=document.createElement('button');b.className='sbtn acc';b.textContent=opts.action.label;b.style.marginLeft='12px';
+    b.onclick=()=>{d.remove();opts.action.fn()};d.appendChild(b);
+  }
+  $('toasts').appendChild(d);
+  setTimeout(gone,opts.ms||(opts.action?9000:cls==='err'?5200:2600));
+  return d;
+}
 const VID_EXT=/\.(mp4|mov|m4v|webm|mkv)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|bmp)$/i;
 
 /* ---------- Tilstand ---------- */
 const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0};
+const defaultKb=()=>({zs:1.0,ze:1.1,px:0,py:0});
 const S={
-  files:[],            // {id,name,file,url,type,dur,w,h,thumb,err}
-  clips:[],            // {id,fid,type,in,out,speed,volume,fadeIn,fadeOut,fit,fx,imgDur,kb:{zs,ze,px,py}}
+  files:[],            // {id,name,size,mtime,file,url,type,dur,w,h,thumb,err}
+  clips:[],            // {id,fid,type,in,out,speed,volume,fadeIn,fadeOut,fit,fx,imgDur,kb:{zs,ze,pxs,pxe,pys,pye},missing?:{name,size}}
   texts:[],            // {id,text,start,dur,x,y,size,color,font,bold,outline,oColor,bg,bgColor,align,fade}
   subs:[],             // {id,start,dur,text}
   subStyle:{size:44,color:'#ffffff',oColor:'#000000',outline:5,margin:7,bg:false,pos:'bund'},
   proj:{w:1080,h:1920,fps:30,bg:'#000000'},
+  /* Fase B (musikspor): S.music kommer med i fortryd-historikken (snap) og i
+     genforbindelsen (mediaRefs) uden yderligere ændringer dér. */
+  music:null,
   t:0, playing:false, sel:{kind:null,id:null}, filter:'all',
   pxPerSec:60, masterVol:1, dirty:false, dirHandle:null
 };
+/* ?selftest må aldrig læse eller skrive brugerens gemte projekt. */
+const SELFTEST=location.search.includes('selftest');
 
 /* ---------- Afledte tider ---------- */
 const clipDur=c=>c.type==='image'?c.imgDur:(c.out-c.in)/c.speed;
 function clipStart(i){let t=0;for(let k=0;k<i;k++)t+=clipDur(S.clips[k]);return t}
 const totalDur=()=>S.clips.reduce((a,c)=>a+clipDur(c),0);
 function clipAt(t){let acc=0;for(let i=0;i<S.clips.length;i++){const d=clipDur(S.clips[i]);if(t<acc+d||i===S.clips.length-1&&t<=acc+d+1e-6)return{i,c:S.clips[i],local:clamp(t-acc,0,d),start:acc};acc+=d}return null}
-const fileOf=c=>S.files.find(f=>f.id===c.fid);
+const fileOf=c=>c.fid?S.files.find(f=>f.id===c.fid):undefined;
+/* Et klip hvis fil ikke er fundet endnu (pladsholder) afspilles som et
+   billedklip med en "Mangler"-plade; det har ingen videoelementer. */
+const isVid=c=>c.type==='video'&&!c.missing;
+const clipName=c=>c.missing?c.missing.name:((fileOf(c)||{}).name||'?');
 </script>
 <script>
 /* ================================================================
@@ -629,7 +657,7 @@ async function addMediaFiles(files){
   files.sort((a,b)=>a.name.localeCompare(b.name));
   if(!files.length){toast('Ingen nye mediefiler fundet');return}
   const items=files.map(f=>({
-    id:uid(),name:f.name,size:f.size,file:f,url:URL.createObjectURL(f),
+    id:uid(),name:f.name,size:f.size,mtime:f.lastModified||0,file:f,url:URL.createObjectURL(f),
     type:VID_EXT.test(f.name)?'video':'image',dur:0,w:0,h:0,thumb:null,err:null,probing:true
   }));
   S.files.push(...items);
@@ -648,7 +676,7 @@ async function addMediaFiles(files){
   };
   await Promise.all([0,1,2,3].map(worker));
   renderBin();
-  tryRestoreProject();
+  relinkMissing();
 }
 
 function probeVideo(it){
@@ -750,7 +778,7 @@ function addClipFromFile(it,atIndex){
   if(it.type==='video'&&!(Number.isFinite(it.dur)&&it.dur>0)){toast('Videoens længde kan ikke bestemmes, så filen kan ikke bruges','err');return}
   const c=it.type==='video'
     ?{id:uid(),fid:it.id,type:'video',in:0,out:it.dur,speed:1,volume:1,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF}}
-    :{id:uid(),fid:it.id,type:'image',imgDur:4,in:0,out:4,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF},kb:{zs:1.0,ze:1.1,px:0,py:0}};
+    :{id:uid(),fid:it.id,type:'image',imgDur:4,in:0,out:4,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF},kb:defaultKb()};
   if(atIndex==null)atIndex=S.clips.length;
   S.clips.splice(atIndex,0,c);
   if(S.clips.length===1&&!S.projManual)adoptProjectSize(it);
@@ -809,6 +837,29 @@ function wrapText(c2,text,maxW){
   }
   return out;
 }
+/* Afkort én linje med … så den kan stå på lærredet (filnavne har ingen mellemrum
+   at ombryde ved). */
+function fitLine(c2,s,maxW){
+  s=String(s);if(c2.measureText(s).width<=maxW)return s;
+  let lo=0,hi=s.length;
+  while(lo<hi){const m=(lo+hi+1)>>1;if(c2.measureText(s.slice(0,m)+'…').width<=maxW)lo=m;else hi=m-1}
+  return s.slice(0,lo)+'…';
+}
+/* Pladsholder for et klip hvis fil ikke er genfundet: stribet plade med
+   navnet, så tidslinjen og timingen står urørt indtil filen dukker op. */
+function drawMissing(c2,c,W,H,sFac){
+  c2.save();
+  c2.fillStyle='#14171d';c2.fillRect(0,0,W,H);
+  c2.strokeStyle='rgba(255,95,86,.10)';c2.lineWidth=18*sFac;c2.beginPath();
+  for(let x=-H;x<W;x+=64*sFac){c2.moveTo(x,H);c2.lineTo(x+H,0)}
+  c2.stroke();
+  c2.textAlign='center';c2.textBaseline='middle';c2.fillStyle='#ffb3ae';
+  c2.font=`700 ${Math.round(56*sFac)}px 'Segoe UI',Arial,sans-serif`;
+  c2.fillText('Mangler:',W/2,H/2-36*sFac);
+  c2.font=`600 ${Math.round(36*sFac)}px 'Segoe UI',Arial,sans-serif`;
+  c2.fillText(fitLine(c2,c.missing.name,W*0.88),W/2,H/2+30*sFac);
+  c2.restore();
+}
 function drawFrame(t,c2,opts){
   opts=opts||{};
   const W=c2.canvas.width,H=c2.canvas.height;
@@ -816,7 +867,8 @@ function drawFrame(t,c2,opts){
   c2.save();
   c2.fillStyle=S.proj.bg;c2.fillRect(0,0,W,H);
   const ca=opts.ca||clipAt(t);
-  if(ca&&ca.c){
+  if(ca&&ca.c&&ca.c.missing)drawMissing(c2,ca.c,W,H,sFac);
+  else if(ca&&ca.c){
     const c=ca.c,it=fileOf(c);
     let src=null,sw=0,sh=0;
     if(c.type==='video'){
@@ -911,12 +963,12 @@ function prepEl(el,c,local){
 }
 function preloadNext(i){
   const n=S.clips[i+1];
-  if(n&&n.type==='video'){prepEl(vNext,n,0);vNext.pause()}
+  if(n&&isVid(n)){prepEl(vNext,n,0);vNext.pause()}
   else vNext._cid=null;
 }
 async function startClip(i,local){
   curIdx=i;const c=S.clips[i];if(!c)return;
-  if(c.type==='video'){
+  if(isVid(c)){
     if(vNext._cid===c.id){const t=vActive;vActive=vNext;vNext=t}
     vNext.pause();
     prepEl(vActive,c,local);
@@ -954,7 +1006,7 @@ function seekTo(t,keepPlaying){
   if(was)pause();
   S.t=t;
   const ca=clipAt(t);
-  if(ca&&ca.c.type==='video'){
+  if(ca&&isVid(ca.c)){
     curIdx=ca.i;
     const el=vActive;
     if(seekBusy){seekPend={c:ca.c,local:ca.local}}
@@ -980,7 +1032,7 @@ function tick(now){
   const dt=(now-lastWall)/1000;lastWall=now;
   if(S.playing&&curIdx>=0&&curIdx<S.clips.length){
     const c=S.clips[curIdx],start=clipStart(curIdx),d=clipDur(c);
-    if(c.type==='video'){
+    if(isVid(c)){
       const el=vActive,local=clamp((el.currentTime-c.in)/c.speed,0,d);
       S.t=start+local;
       applyClipVolume(c,local);
@@ -1033,7 +1085,7 @@ function select(kind,id){
 function deselect(){select(null,null)}
 function updateSelStatus(){
   const k=S.sel.kind;let s='';
-  if(k==='clip'){const c=S.clips.find(x=>x.id===S.sel.id);const it=c&&fileOf(c);s=c?`Valgt: ${it?it.name:'?'} (${fmtDur(clipDur(c))})`:''}
+  if(k==='clip'){const c=S.clips.find(x=>x.id===S.sel.id);s=c?`Valgt: ${c.missing?'mangler fil — ':''}${clipName(c)} (${fmtDur(clipDur(c))})`:''}
   else if(k==='text')s='Valgt: tekst';
   else if(k==='sub')s='Valgt: undertekst';
   else if(k==='file'){const f=S.files.find(x=>x.id===S.sel.id);s=f?`Valgt i bibliotek: ${f.name}`:''}
@@ -1065,12 +1117,12 @@ function renderTL(){
   let acc=0;
   S.clips.forEach((c,i)=>{
     const it=fileOf(c),d=clipDur(c),b=document.createElement('div');
-    b.className='blk clip'+(S.sel.kind==='clip'&&S.sel.id===c.id?' sel':'');
+    b.className='blk clip'+(c.missing?' missing':'')+(S.sel.kind==='clip'&&S.sel.id===c.id?' sel':'');
     b.dataset.id=c.id;
     /* Tastatur: Tab til blokken, Enter/Mellemrum vælger (click med detail 0
        fra [role=button]-lytteren; pointer-valg sker allerede i pointerdown). */
     b.tabIndex=0;b.setAttribute('role','button');
-    b.setAttribute('aria-label',`Klip ${i+1}: ${it?it.name:'?'} (${fmtDur(d)})`);
+    b.setAttribute('aria-label',`Klip ${i+1}: ${c.missing?'mangler fil ':''}${clipName(c)} (${fmtDur(d)})`);
     b.addEventListener('click',e=>{if(e.detail===0)select('clip',c.id)});
     b.style.left=(acc*S.pxPerSec)+'px';
     b.style.width=Math.max(14,d*S.pxPerSec-2)+'px';
@@ -1081,7 +1133,7 @@ function renderTL(){
     if(c.type==='image')tags.push('<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-image"></use></svg>');
     b.innerHTML=`${tags.length?`<div class="fxdot">${tags.join(' ')}</div>`:''}
       <div class="dtag">${fmtDur(d)}</div>
-      <div class="lbl">${it?esc(it.name):'?'}</div>
+      <div class="lbl">${c.missing?'Mangler: ':''}${esc(clipName(c))}</div>
       <div class="hnd l"></div><div class="hnd r"></div>`;
     attachClipEvents(b,c,i);
     tr.appendChild(b);
@@ -1365,7 +1417,8 @@ function inspClip(B,c){
   const it=fileOf(c);
   $('inspTitle').textContent=c.type==='video'?'Videoklip':'Billedklip';
   const s1=sec(B,'Klip');
-  s1.appendChild(el('div',null,`<div style="font-size:11px;color:var(--faint);margin-bottom:8px">${it?esc(it.name):'?'} · kilde ${it?fmtDur(it.dur||0):''} · på tidslinjen ${fmtDur(clipDur(c))}</div>`));
+  if(c.missing)s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--err);margin-bottom:8px;line-height:1.5">${ICO('warning','gi--sm')} Filen mangler: <b>${esc(c.missing.name)}</b>. Åbn mappen med filen, så forbindes klippet automatisk.</div>`));
+  s1.appendChild(el('div',null,`<div style="font-size:11px;color:var(--faint);margin-bottom:8px">${esc(clipName(c))} · kilde ${it?fmtDur(it.dur||0):'—'} · på tidslinjen ${fmtDur(clipDur(c))}</div>`));
   if(c.type==='video'){
     num(s1,'Ind (s)',c,'in',0,it?it.dur:1e5,0.01,{tl:1,cb:()=>{c.in=Math.min(c.in,c.out-0.08)}});
     num(s1,'Ud (s)',c,'out',0.05,it?it.dur:1e5,0.01,{tl:1,cb:()=>{c.out=Math.max(c.out,c.in+0.08)}});
@@ -1499,6 +1552,20 @@ function inspFile(B){
 }
 function inspProject(B){
   $('inspTitle').textContent='Projekt';
+  /* Et gemt projekt hvis filer ikke er fundet endnu: sig det, og peg på vejen. */
+  const miss=S.clips.filter(c=>c.missing);
+  if(miss.length){
+    const all=miss.length===S.clips.length;
+    const sw=sec(B,all?'Gemt projekt venter på medier':'Klip mangler deres fil');
+    const names=[...new Set(miss.map(c=>c.missing.name))];
+    sw.appendChild(el('div',null,`<div style="font-size:12px;color:var(--gt-warn-ink);line-height:1.6;margin-bottom:8px">${ICO('warning','gi--sm')} ${miss.length} af ${S.clips.length} klip venter på deres fil (${esc(names.slice(0,3).join(', '))}${names.length>3?' …':''}). Åbn mappen med dem, så forbindes de automatisk.</div>`));
+    const br=el('div','btnRow');
+    const bo=el('button','sbtn acc',ICO('folder-open')+' Åbn mappe');bo.onclick=openDirPicker;br.appendChild(bo);
+    if($('btnReopenDir').style.display!=='none'){const brd=el('button','sbtn',ICO('refresh')+' Genåbn seneste mappe');brd.onclick=()=>$('btnReopenDir').click();br.appendChild(brd)}
+    const bx=el('button','sbtn danger','Fjern manglende klip');
+    bx.onclick=()=>{if(confirm(`Fjern de ${miss.length} klip der mangler deres fil fra tidslinjen?`)){S.clips=S.clips.filter(c=>!c.missing);renderTL();renderInsp();markDirty('fjern manglende klip');seekTo(clamp(S.t,0,totalDur()))}};
+    br.appendChild(bx);sw.appendChild(br);
+  }
   const s1=sec(B,'Format');
   const resSel=el('select');
   const RES=[['1080x1920','1080×1920 · Lodret 9:16'],['1920x1080','1920×1080 · Bred 16:9'],['1080x1080','1080×1080 · Kvadrat'],['720x1280','720×1280 · Lodret let'],['1280x720','1280×720 · Bred let']];
@@ -1523,27 +1590,46 @@ function inspProject(B){
   s3.appendChild(el('div',null,`<div style="font-size:11px;color:var(--faint);margin-bottom:8px">Gemmes automatisk i browseren. Brug ${ICO('save')} Gem for en projektfil du kan dele/flytte.</div>`));
   const br=el('div','btnRow');
   const bc=el('button','sbtn danger','Ryd tidslinjen');
-  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty();invalidate();$('stageHint').style.display='flex'}};
+  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty('ryd tidslinjen');invalidate();$('stageHint').style.display='flex'}};
   br.appendChild(bc);s3.appendChild(br);
+  /* Rullende backup: autosave lægger det gemte projekt her, før det
+     overskrives med et projekt med færre klip (og før Indlæs/Gendan). */
+  const prev=readPrevAutosave(),pn=k=>prev&&Array.isArray(prev[k])?prev[k].length:0;
+  if(prev&&(pn('clips')||pn('texts')||pn('subs'))){
+    const n=Array.isArray(prev.clips)?prev.clips.length:0;
+    const when=prev.savedAt?new Date(prev.savedAt).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const bp=el('button','sbtn',ICO('undo')+` Gendan forrige autosave (${n} klip${when?' · '+esc(when):''})`);
+    bp.onclick=restorePrevAutosave;
+    const br2=el('div','btnRow');br2.appendChild(bp);s3.appendChild(br2);
+  }
   if(S.subs.length||S.texts.length)inspSubShared(B);
 }
 
 /* ================================================================
    PROJEKT: GEM / INDLÆS / AUTOSAVE
    ================================================================ */
-const LSKEY='mediestudio_v1';
+const LSKEY='mediestudio_v1',LSPREV='mediestudio_v1_prev';
 function serializeProject(){
-  const nameOf=fid=>{const f=S.files.find(x=>x.id===fid);return f?f.name:fid};
   return {
     v:1,name:$('projName').value,proj:{...S.proj},projManual:!!S.projManual,
     subStyle:{...S.subStyle},
-    clips:S.clips.map(c=>({...c,fileName:nameOf(c.fid),fid:undefined})),
+    /* Et klip der venter på sin fil (missing) gemmes med samme navn og
+       størrelse som da det blev gemt, så det kan genforbindes senere. */
+    clips:S.clips.map(c=>{const it=fileOf(c);return{...c,fid:undefined,missing:undefined,
+      fileName:it?it.name:(c.missing?c.missing.name:'?'),fileSize:it?it.size:(c.missing&&c.missing.size||undefined)}}),
     texts:S.texts.map(t=>({...t})),subs:S.subs.map(s=>({...s})),
     masterVol:S.masterVol,savedAt:Date.now()
   };
 }
-function applyProject(p){
-  $('projName').value=p.name||'Mit projekt';
+/* Find en indlæst fil til et gemt klip: navn + størrelse når størrelsen er
+   kendt (to kamerakort kan begge have IMG_0001.JPG), ellers kun navn. */
+function matchFile(name,size){
+  const ok=x=>x.name===name&&!x.err&&!x.probing&&(x.type!=='video'||x.dur>0);
+  return S.files.find(x=>ok(x)&&(!size||x.size===size));
+}
+function applyProject(p,opts){
+  opts=opts||{};
+  $('projName').value=typeof p.name==='string'&&p.name?p.name:'Mit projekt';
   /* Projektfiler kommer udefra (deles, flyttes, gendannes fra localStorage).
      Alle tal tvinges til tal inden for deres grænser, valg til kendte værdier
      og id'er laves om, så intet felt kan ende som markup i innerHTML
@@ -1562,41 +1648,87 @@ function applyProject(p){
   const missing=[];
   S.clips=[];
   for(const c of arr(p.clips)){
-    const f=S.files.find(x=>x.name===c.fileName&&!x.err);
-    if(!f){missing.push(c.fileName);continue}
-    const fx=c.fx||{},kb=c.kb,type=f.type==='image'?'image':'video';
+    if(!c||typeof c!=='object')continue;
+    const fname=String(c.fileName==null?'?':c.fileName).slice(0,260),fsize=num(c.fileSize,0,0,1e14);
+    const f=matchFile(fname,fsize);
+    /* Uopløste klip smides ikke væk: de bliver stående som pladsholdere
+       (missing) med deres timing og genforbindes når filen importeres. */
+    const fx=c.fx||{},kb=c.kb,type=f?(f.type==='image'?'image':'video'):(c.type==='image'?'image':'video');
     const cl={
-      id:uid(),fid:f.id,type,
-      in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
+      id:uid(),fid:f?f.id:null,type,
+      in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f&&f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,2),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'?'contain':'cover',
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
       kb:kb?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),px:num(kb.px,0,-1,1),py:num(kb.py,0,-1,1)}:undefined
     };
+    if(!f){cl.missing={name:fname,size:fsize};missing.push(fname)}
     if(type==='image')cl.out=cl.imgDur;else if(cl.out<cl.in+0.05)cl.out=cl.in+0.05;
     S.clips.push(cl);
   }
   applyProjSize();renderTL();invalidate();deselect();
-  if(S.clips.length)$('stageHint').style.display='none';
-  if(missing.length)toast(`${missing.length} klip mangler filer: ${[...new Set(missing)].slice(0,3).join(', ')}…`,'err');
+  $('stageHint').style.display=S.clips.length?'none':'flex';
+  if(missing.length&&!opts.quiet)toast(`${missing.length} klip venter på deres fil (${[...new Set(missing)].slice(0,3).join(', ')}${missing.length>3?' …':''}) — åbn mappen med dem`,'err');
+  return missing.length;
 }
-let _pendingLS=null;
-try{_pendingLS=JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){}
-function tryRestoreProject(){
-  if(_pendingLS&&!S.clips.length&&(_pendingLS.clips||[]).length){
-    const p=_pendingLS;_pendingLS=null;
-    applyProject(p);
-    if(S.clips.length)toast('Projekt gendannet fra sidste session ✓','ok');
+/* Genforbind pladsholdere med filer der er kommet ind siden (Åbn mappe,
+   Filer, træk-og-slip, Opdater mappe). Kaldes efter hver import. */
+function mediaRefs(){return S.clips}  /* Fase B: + S.music */
+function relinkMissing(opts){
+  let n=0;
+  for(const c of mediaRefs()){
+    if(!c.missing)continue;
+    const f=matchFile(c.missing.name,c.missing.size);
+    if(!f)continue;
+    c.fid=f.id;delete c.missing;n++;
+    c.type=f.type==='image'?'image':'video';
+    if(c.type==='image'){if(!(c.imgDur>0))c.imgDur=4;c.out=c.imgDur;if(!c.kb)c.kb=defaultKb()}
+    else if(f.dur>0){c.out=Math.min(c.out,f.dur);if(c.in>c.out-0.05)c.in=Math.max(0,c.out-0.05)}
   }
+  if(n&&!(opts&&opts.silent)){
+    S.dirty=true;
+    renderTL();renderInsp();invalidate();seekTo(clamp(S.t,0,totalDur()));
+    toast(`${n} klip genforbundet med deres filer ✓`,'ok');
+  }
+  return n;
+}
+function readPrevAutosave(){
+  if(SELFTEST)return null;
+  try{const p=JSON.parse(localStorage.getItem(LSPREV)||'null');return p&&typeof p==='object'?p:null}catch(e){return null}
+}
+const clipCountOf=raw=>{try{const p=JSON.parse(raw);return p&&Array.isArray(p.clips)?p.clips.length:0}catch(e){return 0}};
+/* Læg det nuværende autosave over i backup-pladsen (før Indlæs/Gendan). */
+function backupAutosave(){
+  if(SELFTEST)return;
+  try{const old=localStorage.getItem(LSKEY);if(old&&clipCountOf(old))localStorage.setItem(LSPREV,old)}catch(e){}
+}
+/* Autosave skriver kun når noget er ændret (S.dirty), og en skrivning med
+   færre klip end det gemte lægger først det gemte over i LSPREV. Så kan en
+   tom opstart, en genindlæsning eller et fejlklik aldrig æde et projekt. */
+function writeAutosave(){
+  S.dirty=false;
+  if(SELFTEST)return;
+  try{
+    const next=JSON.stringify(serializeProject());
+    const old=localStorage.getItem(LSKEY);
+    if(old&&clipCountOf(old)>S.clips.length)localStorage.setItem(LSPREV,old);
+    localStorage.setItem(LSKEY,next);
+  }catch(e){console.warn('Autosave fejlede',e)}
+}
+function restorePrevAutosave(){
+  const p=readPrevAutosave();if(!p)return;
+  if(!confirm('Erstat det nuværende projekt med forrige autosave?\n\nDet nuværende projekt lægges i stedet som "forrige autosave", så du kan skifte tilbage.'))return;
+  const cur=JSON.stringify(serializeProject());
+  applyProject(p,{quiet:true});
+  try{localStorage.setItem(LSPREV,cur)}catch(e){}
+  writeAutosave();
+  if(typeof histReset==='function')histReset();
+  toast('Forrige autosave gendannet ✓','ok');
 }
 function markDirty(){S.dirty=true}
-setInterval(()=>{
-  if(S.dirty){S.dirty=false;
-    try{localStorage.setItem(LSKEY,JSON.stringify(serializeProject()))}catch(e){}
-  }
-},3000);
-addEventListener('beforeunload',()=>{try{localStorage.setItem(LSKEY,JSON.stringify(serializeProject()))}catch(e){}});
-$('projName').oninput=markDirty;
+setInterval(()=>{if(S.dirty)writeAutosave()},3000);
+addEventListener('beforeunload',()=>{if(S.dirty)writeAutosave()});
+$('projName').oninput=()=>{S.dirty=true};
 
 async function saveBlob(blob,fileName,types){
   if(window.showSaveFilePicker){
@@ -1618,7 +1750,9 @@ $('btnSaveProj').onclick=()=>{
 $('btnLoadProj').onclick=()=>$('projInput').click();
 $('projInput').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
-  try{applyProject(JSON.parse(await f.text()));_pendingLS=null;toast('Projekt indlæst ✓','ok')}
+  try{const p=JSON.parse(await f.text());if(!p||typeof p!=='object')throw new Error('ugyldig');
+    backupAutosave();const nm=applyProject(p);S.dirty=true;if(typeof histReset==='function')histReset();
+    if(!nm)toast('Projekt indlæst ✓','ok')}
   catch(err){toast('Ugyldig projektfil','err')}
   e.target.value='';
 };
@@ -1699,6 +1833,10 @@ $('btnStill').onclick=()=>{
 
 $('btnExport').onclick=()=>{
   if(!S.clips.length){toast('Tidslinjen er tom — tilføj klip først','err');return}
+  const nMiss=S.clips.filter(c=>c.missing).length;
+  if(nMiss&&!confirm(`${nMiss} klip mangler deres fil og kommer med som "Mangler"-plader i videoen.
+
+Åbn mappen med filerne først for at få dem med. Eksportér alligevel?`))return;
   const f=$('expFmt');f.innerHTML='';
   if(canMp4())f.appendChild(new Option('MP4 · H.264 (anbefalet)','mp4'));
   f.appendChild(new Option('WebM · VP9 (virker offline)','webm'));
@@ -1780,7 +1918,7 @@ async function buildMasterAudio(total){
   let acc=0;
   for(const c of S.clips){
     const start=acc;acc+=clipDur(c);
-    if(c.type!=='video'||c.volume<=0)continue;
+    if(!isVid(c)||c.volume<=0)continue;
     const it=fileOf(c);if(!it)continue;
     let buf=cache.get(it.id);
     if(buf===undefined){
@@ -1864,8 +2002,9 @@ async function exportMP4(q,half,prog,noSave){
   try{
     for(let i=0;i<S.clips.length&&!expCancelled;i++){
       const c=S.clips[i],start=acc,d=clipDur(c);acc+=d;
-      const it=fileOf(c);if(!it)continue;
-      if(c.type==='image'){
+      const it=fileOf(c);
+      /* Billedklip og pladsholdere (manglende fil) tegnes billede for billede. */
+      if(c.type==='image'||!it){
         const n=Math.max(1,Math.round(d*fps));
         for(let k=0;k<n&&!expCancelled;k++){
           const local=k/fps;
@@ -2019,6 +2158,18 @@ function netBadgeUpdate(){
 (function boot(){
   applyProjSize();
   renderTL();renderInsp();
+  /* Gendan sidste session med det samme: klippene står som pladsholdere
+     ("Mangler: …") indtil mappen med deres filer åbnes, og genforbindes så.
+     Projektet ligger derfor altid helt i S, og en tidlig genindlæsning eller
+     lukning kan ikke overskrive det med et tomt projekt. */
+  if(!SELFTEST){
+    let saved=null;try{saved=JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){}
+    const has=k=>saved&&Array.isArray(saved[k])&&saved[k].length;
+    if(saved&&typeof saved==='object'&&(has('clips')||has('texts')||has('subs'))){
+      const nm=applyProject(saved,{quiet:true});
+      toast(nm?`Projektet fra sidste session er gendannet — ${nm} klip venter på deres filer. Åbn mappen med dem.`:'Projekt gendannet fra sidste session ✓',nm?'':'ok',{ms:nm?7000:3000});
+    }
+  }
   netBadgeUpdate();
   if(!window.showDirectoryPicker)console.warn('showDirectoryPicker utilgængelig — bruger mappe-input fallback');
   /* Bannere ligger i egen grid-række (2) under værktøjslinjen i stedet for
