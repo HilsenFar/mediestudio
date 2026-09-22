@@ -3435,7 +3435,10 @@ function exportWebM(q,prog,size){
    laver en 404 i konsollen.
    ================================================================ */
 const GS={ok:false,jobs:[],busy:false,prevFocus:null,io:null};
-const GS_LOCAL=/^https?:$/.test(location.protocol)&&/^((.+\.)?localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(location.hostname);
+/* Desktop-udgaven (Electron, file://) har en skrivebeskyttet bro til GenStudio på
+   127.0.0.1:8340 i preload.js: window.genstudioBridge.jobs()/output(fil). */
+const GS_BRIDGE=typeof window.genstudioBridge==='object'&&window.genstudioBridge?window.genstudioBridge:null;
+const GS_LOCAL=!!GS_BRIDGE||(/^https?:$/.test(location.protocol)&&/^((.+\.)?localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(location.hostname));
 /* Læsbart filnavn: promptens begyndelse (æ/ø/å → ae/oe/aa, som GenStudios
    egne download-navne) + de første tegn af job-id'et, så to resultater af
    samme prompt ikke får samme navn. Højst 60 tegn før endelsen. */
@@ -3450,6 +3453,11 @@ function gsFileName(job,out,idx){
   return `${base}-${id}.${ext}`;
 }
 async function gsFetchJobs(){
+  if(GS_BRIDGE){
+    const j=await GS_BRIDGE.jobs();
+    if(!j||!Array.isArray(j.jobs))throw new Error('GenStudio kører ikke');
+    return j.jobs;
+  }
   const r=await fetch('/api/jobs',{cache:'no-store',headers:{accept:'application/json'}});
   if(!r.ok||!/json/i.test(r.headers.get('content-type')||''))throw new Error('ikke GenStudio');
   const j=await r.json();
@@ -3470,6 +3478,10 @@ function gsItems(){
   return out.sort((a,b)=>b.t-a.t);
 }
 async function gsFile(it){
+  if(GS_BRIDGE){
+    const o=await GS_BRIDGE.output(it.out.file);
+    return new File([o.data],it.name,{type:o.type||'',lastModified:it.t||Date.now()});
+  }
   const r=await fetch('/media/outputs/'+encodeURIComponent(it.out.file),{cache:'no-store'});
   if(!r.ok)throw new Error(`${it.out.file}: ${r.status}`);
   const b=await r.blob();
@@ -3487,7 +3499,9 @@ function gsRender(){
   for(const x of items){
     const row=document.createElement('label');row.className='gsRow';
     const url='/media/outputs/'+encodeURIComponent(x.out.file);
-    const th=x.kind==='image'?`<img class="gsTh" loading="lazy" alt="" src="${esc(url)}">`
+    /* Via desktop-broen er der ingen URL at pege på; der vises typens ikon i stedet. */
+    const th=GS_BRIDGE?`<span class="gsTh">${ICO(x.kind==='video'?'film':x.kind==='image'?'image':'music')}</span>`
+      :x.kind==='image'?`<img class="gsTh" loading="lazy" alt="" src="${esc(url)}">`
       :x.kind==='video'?`<video class="gsTh" muted playsinline preload="none" data-src="${esc(url)}#t=0.3"></video>`
       :`<span class="gsTh">${ICO('music')}</span>`;
     const when=x.t?new Date(x.t).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
