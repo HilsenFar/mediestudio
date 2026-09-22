@@ -1,5 +1,9 @@
-/* MedieStudio service worker — cache-first app shell */
-const VERSION = 'mediestudio-v4';
+/* MedieStudio service worker — app-skallen i cache, så appen virker offline.
+   Navigationer (index.html) hentes net-først: en ny version når ud uden at
+   VERSION skal bumpes, og cachen er kun reserve når nettet er væk.
+   Øvrige filer (css, ikoner, fonte, mp4-muxer) er cache-først.
+   Registreres IKKE når appen serveres lokalt (fx fra GenStudio på :8340). */
+const VERSION = 'mediestudio-v5';
 const SHELL = [
   './',
   './index.html',
@@ -21,8 +25,12 @@ const SHELL = [
 ];
 
 self.addEventListener('install', e => {
+  /* cache:'reload' går uden om HTTP-cachen (sitet sender max-age=600), så en
+     ny version aldrig gemmer en gammel index.html under sit nye navn. */
   e.waitUntil(
-    caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(VERSION)
+      .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
   );
 });
 
@@ -34,15 +42,47 @@ self.addEventListener('activate', e => {
   );
 });
 
+function shellFromCache(req) {
+  return caches.match(req, { ignoreSearch: true })
+    .then(hit => hit || caches.match('./index.html'))
+    .then(hit => hit || caches.match('./'));
+}
+
 self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
+  const req = e.request;
+  if (req.method !== 'GET') return;
+
+  if (req.mode === 'navigate') {
+    /* Net først (genvalideret mod serveren), cache som reserve. Svarer nettet
+       ikke inden 5 s, og der er en cachet kopi, bruges den. */
+    e.respondWith(new Promise(resolve => {
+      let done = false;
+      const finish = r => { if (!done && r) { done = true; resolve(r); } };
+      const slow = setTimeout(() => shellFromCache(req).then(finish), 5000);
+      fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }))
+        .then(res => {
+          clearTimeout(slow);
+          if (res.ok && new URL(req.url).origin === location.origin) {
+            const copy = res.clone();
+            caches.open(VERSION).then(c => c.put('./index.html', copy));
+          }
+          finish(res);
+        })
+        .catch(() => {
+          clearTimeout(slow);
+          shellFromCache(req).then(hit => finish(hit || Response.error()));
+        });
+    }));
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request, { ignoreSearch: e.request.mode === 'navigate' }).then(hit =>
+    caches.match(req).then(hit =>
       hit ||
-      fetch(e.request).then(res => {
-        if (res.ok && new URL(e.request.url).origin === location.origin) {
+      fetch(req).then(res => {
+        if (res.ok && new URL(req.url).origin === location.origin) {
           const copy = res.clone();
-          caches.open(VERSION).then(c => c.put(e.request, copy));
+          caches.open(VERSION).then(c => c.put(req, copy));
         }
         return res;
       })

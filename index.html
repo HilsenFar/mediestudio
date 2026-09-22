@@ -2345,6 +2345,25 @@ async function selftest(){
   }catch(e){console.error('[SELFTEST] FAIL ❌',e);stBadge('SELVTEST FEJL: '+(e&&e.message||e),false)}
 }
 
+/* ---------- Service worker ---------- */
+/* Ny version: den nye SW tager over med det samme (skipWaiting + claim);
+   så tilbydes en genindlæsning — men aldrig midt i en eksport. Første
+   installation (ingen tidligere controller) giver ingen besked. */
+function setupServiceWorker(){
+  const hadController=!!navigator.serviceWorker.controller;
+  let offered=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadController||offered)return;
+    offered=true;
+    const offer=()=>{
+      if(expRunning){setTimeout(offer,2000);return}
+      toast('Ny version klar – genindlæs','ok',{ms:120000,action:{label:'Genindlæs',fn:()=>{if(S.dirty)writeAutosave();location.reload()}}});
+    };
+    offer();
+  });
+  return navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW-registrering fejlede',e));
+}
+
 /* ---------- Opstart ---------- */
 function netBadgeUpdate(){
   $('netBadge').textContent=canMp4()?'MP4-eksport klar':'MP4-modul ikke indlæst · WebM virker altid';
@@ -2411,9 +2430,11 @@ function netBadgeUpdate(){
   }
   narrowCheck();
   narrowMQ.addEventListener('change',narrowCheck);
-  if('serviceWorker' in navigator&&location.protocol==='https:'){
-    navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('SW-registrering fejlede',e));
-  }
+  /* Service worker kun på det udgivne https-site. Lokalt (GenStudio på
+     127.0.0.1:8340/medie/, dev-servere) registreres den ikke, så en lokal
+     opdatering af filerne altid slår igennem ved næste indlæsning. */
+  const localServe=location.port==='8340'||/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  if('serviceWorker' in navigator&&location.protocol==='https:'&&!localServe)setupServiceWorker();
   requestAnimationFrame(()=>{drawRuler();invalidate()});
   /* Linealen tegnes i UI-fonten; tegn igen når den er hentet. */
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawRuler);
