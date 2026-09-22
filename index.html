@@ -450,6 +450,9 @@ textarea:focus-visible,
 
 <div id="tl">
   <div id="tlTools">
+    <button class="tbtn" id="btnUndo" title="Fortryd (Ctrl+Z)" aria-label="Fortryd" disabled><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-undo"></use></svg></button>
+    <button class="tbtn" id="btnRedo" title="Gentag (Ctrl+Y)" aria-label="Gentag" disabled><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-redo"></use></svg></button>
+    <div class="sep"></div>
     <button class="tbtn" id="btnSplit" title="Del klip ved markøren (S)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-scissors"></use></svg> Del</button>
     <button class="tbtn" id="btnDel" title="Slet valgte (Delete)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-trash"></use></svg> Slet</button>
     <button class="tbtn" id="btnDup" title="Duplikér valgte (Ctrl+D)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-duplicate"></use></svg> Duplikér</button>
@@ -783,7 +786,7 @@ function addClipFromFile(it,atIndex){
   S.clips.splice(atIndex,0,c);
   if(S.clips.length===1&&!S.projManual)adoptProjectSize(it);
   select('clip',c.id);
-  renderTL();markDirty();
+  renderTL();markDirty('tilføj klip');
   $('stageHint').style.display='none';
   if(S.clips.length===1)seekTo(0);
 }
@@ -1186,7 +1189,7 @@ function attachClipEvents(b,c,idx){
         }
         b.style.width=Math.max(14,clipDur(c)*S.pxPerSec-2)+'px';
         if(dtag)dtag.textContent=fmtDur(clipDur(c));
-        markDirty();invalidate();
+        markDirty('trim klip');invalidate();
       };
       const up=()=>{b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',up);renderTL();renderInsp();seekTo(clamp(S.t,0,totalDur()))};
       b.addEventListener('pointermove',move);b.addEventListener('pointerup',up);
@@ -1211,7 +1214,7 @@ function attachClipEvents(b,c,idx){
         if(moved&&b._ins!=null){
           const from=S.clips.indexOf(c);let to=b._ins;
           if(to>from)to--;
-          if(to!==from){S.clips.splice(from,1);S.clips.splice(to,0,c);renderTL();markDirty();invalidate()}
+          if(to!==from){S.clips.splice(from,1);S.clips.splice(to,0,c);renderTL();markDirty('flyt klip');invalidate()}
         }
       };
       b.addEventListener('pointermove',move);b.addEventListener('pointerup',up);
@@ -1234,7 +1237,7 @@ function attachOverlayEvents(b,x,kind){
       else{x.start=snapT(clamp(oStart+dSec,0,1e6),x.id)}
       b.style.left=(x.start*S.pxPerSec)+'px';
       b.style.width=Math.max(12,x.dur*S.pxPerSec-2)+'px';
-      markDirty();invalidate();
+      markDirty(kind==='text'?'flyt tekst':'flyt undertekst');invalidate();
     };
     const up=()=>{b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',up);renderTL();renderInsp()};
     b.addEventListener('pointermove',move);b.addEventListener('pointerup',up);
@@ -1311,30 +1314,31 @@ function splitAtPlayhead(){
   }
   c.fadeOut=0;c2.fadeIn=0;
   S.clips.splice(ca.i+1,0,c2);
-  select('clip',c2.id);renderTL();markDirty();
+  select('clip',c2.id);renderTL();markDirty('del klip');
 }
 function deleteSelected(){
   const k=S.sel.kind;
-  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){S.clips.splice(i,1);deselect();renderTL();markDirty();seekTo(clamp(S.t,0,totalDur()));if(!S.clips.length)$('stageHint').style.display='flex'}}
-  else if(k==='text'){S.texts=S.texts.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty();invalidate()}
-  else if(k==='sub'){S.subs=S.subs.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty();invalidate()}
+  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){S.clips.splice(i,1);deselect();renderTL();markDirty('slet klip');seekTo(clamp(S.t,0,totalDur()));if(!S.clips.length)$('stageHint').style.display='flex'}}
+  else if(k==='text'){S.texts=S.texts.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet tekst');invalidate()}
+  else if(k==='sub'){S.subs=S.subs.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet undertekst');invalidate()}
 }
 function duplicateSelected(){
   const k=S.sel.kind;
-  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){const c=S.clips[i],n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};S.clips.splice(i+1,0,n);select('clip',n.id);renderTL();markDirty()}}
-  else if(k==='text'){const x=selText();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.texts.push(n);select('text',n.id);renderTL();markDirty()}}
-  else if(k==='sub'){const x=selSub();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.subs.push(n);select('sub',n.id);renderTL();markDirty()}}
+  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){const c=S.clips[i],n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};S.clips.splice(i+1,0,n);select('clip',n.id);renderTL();markDirty('duplikér klip')}}
+  else if(k==='text'){const x=selText();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.texts.push(n);select('text',n.id);renderTL();markDirty('duplikér tekst')}}
+  else if(k==='sub'){const x=selSub();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.subs.push(n);select('sub',n.id);renderTL();markDirty('duplikér undertekst')}}
 }
 function addTextAtPlayhead(){
   const x={id:uid(),text:'Ny tekst',start:snapT(S.t),dur:3,x:50,y:50,size:72,color:'#ffffff',font:"'Segoe UI',Arial,sans-serif",bold:true,outline:6,oColor:'#000000',bg:false,bgColor:'#000000',align:'center',fade:true};
-  S.texts.push(x);select('text',x.id);renderTL();markDirty();invalidate();
+  S.texts.push(x);select('text',x.id);renderTL();markDirty('ny tekst');invalidate();
 }
 function addSubAtPlayhead(){
   const prev=[...S.subs].sort((a,b)=>a.start-b.start).filter(s=>s.start+s.dur<=S.t+0.01).pop();
   const st=Math.max(S.t,prev?prev.start+prev.dur:0);
   const x={id:uid(),start:st,dur:2.5,text:'Undertekst her'};
-  S.subs.push(x);select('sub',x.id);renderTL();markDirty();invalidate();
+  S.subs.push(x);select('sub',x.id);renderTL();markDirty('ny undertekst');invalidate();
 }
+$('btnUndo').onclick=()=>undo();$('btnRedo').onclick=()=>redo();
 $('btnSplit').onclick=splitAtPlayhead;
 $('btnDel').onclick=deleteSelected;
 $('btnDup').onclick=duplicateSelected;
@@ -1369,33 +1373,33 @@ function rng(parent,label,obj,key,min,max,step,opt){
   i.type='range';i.min=min;i.max=max;i.step=step;i.value=obj[key];
   const fmt=opt.fmt||(x=>(+x).toFixed(step<0.1?2:step<1?1:0));
   v.textContent=fmt(obj[key]);
-  i.oninput=()=>{obj[key]=+i.value;v.textContent=fmt(obj[key]);markDirty();invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
+  i.oninput=()=>{obj[key]=+i.value;v.textContent=fmt(obj[key]);markDirty(label);invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
   r.append(i,v);parent.appendChild(r);return i;
 }
 function num(parent,label,obj,key,min,max,step,opt){
   opt=opt||{};
   const r=row(label),i=el('input');
   i.type='number';i.min=min;i.max=max;i.step=step;i.value=Math.round(obj[key]*100)/100;
-  i.onchange=()=>{obj[key]=clamp(+i.value||0,min,max);i.value=Math.round(obj[key]*100)/100;markDirty();invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
+  i.onchange=()=>{obj[key]=clamp(+i.value||0,min,max);i.value=Math.round(obj[key]*100)/100;markDirty(label);invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
   r.appendChild(i);if(opt.suffix)r.appendChild(el('span','val',opt.suffix));
   parent.appendChild(r);return i;
 }
 function col(parent,label,obj,key){
   const r=row(label),i=el('input');
   i.type='color';i.value=obj[key];
-  i.oninput=()=>{obj[key]=i.value;markDirty();invalidate()};
+  i.oninput=()=>{obj[key]=i.value;markDirty(label);invalidate()};
   r.appendChild(i);parent.appendChild(r);return r;
 }
 function chk(parent,label,obj,key,cb){
   const r=row(label),i=el('input');
   i.type='checkbox';i.checked=!!obj[key];
-  i.onchange=()=>{obj[key]=i.checked;markDirty();invalidate();if(cb)cb()};
+  i.onchange=()=>{obj[key]=i.checked;markDirty(label);invalidate();if(cb)cb()};
   r.appendChild(i);parent.appendChild(r);return i;
 }
 function selBox(parent,label,obj,key,options,cb){
   const r=row(label),s=el('select');
   for(const o of options){const[val,txt]=o.split('|');const op=el('option',null,txt||val);op.value=val;if(String(obj[key])===val)op.selected=true;s.appendChild(op)}
-  s.onchange=()=>{obj[key]=s.value;markDirty();invalidate();if(cb)cb(s.value)};
+  s.onchange=()=>{obj[key]=s.value;markDirty(label);invalidate();if(cb)cb(s.value)};
   r.appendChild(s);parent.appendChild(r);return s;
 }
 function sec(parent,title,miniLabel,miniCb){
@@ -1438,13 +1442,13 @@ function inspClip(B,c){
     rng(s3,'Pan lodret',c.kb,'py',-1,1,0.05);
     const pr=el('div','presets');
     for(const[nm,kb]of Object.entries({'Ingen':{zs:1,ze:1,px:0,py:0},'Zoom ind':{zs:1,ze:1.25,px:0,py:0},'Zoom ud':{zs:1.25,ze:1,px:0,py:0},'Pan →':{zs:1.15,ze:1.15,px:1,py:0},'Pan ←':{zs:1.15,ze:1.15,px:-1,py:0}})){
-      const p=asBtn(el('span','preset',nm));p.onclick=()=>{Object.assign(c.kb,kb);markDirty();invalidate();renderInsp()};pr.appendChild(p);
+      const p=asBtn(el('span','preset',nm));p.onclick=()=>{Object.assign(c.kb,kb);markDirty('Ken Burns: '+nm);invalidate();renderInsp()};pr.appendChild(p);
     }
     s3.appendChild(pr);
   }
-  const s2=sec(B,'Effekter','Nulstil',()=>{c.fx={...FXDEF};markDirty();invalidate();renderInsp();renderTL()});
+  const s2=sec(B,'Effekter','Nulstil',()=>{c.fx={...FXDEF};markDirty('nulstil effekter');invalidate();renderInsp();renderTL()});
   const pr=el('div','presets');pr.style.marginBottom='9px';
-  for(const nm of Object.keys(FXPRESETS)){const p=asBtn(el('span','preset',nm));p.onclick=()=>{c.fx={...FXPRESETS[nm]};markDirty();invalidate();renderInsp();renderTL()};pr.appendChild(p)}
+  for(const nm of Object.keys(FXPRESETS)){const p=asBtn(el('span','preset',nm));p.onclick=()=>{c.fx={...FXPRESETS[nm]};markDirty('effekt: '+nm);invalidate();renderInsp();renderTL()};pr.appendChild(p)}
   s2.appendChild(pr);
   rng(s2,'Lysstyrke',c.fx,'bright',0,2.5,0.01);
   rng(s2,'Kontrast',c.fx,'contrast',0,2.5,0.01);
@@ -1465,7 +1469,7 @@ function inspText(B,tx){
   $('inspTitle').textContent='Tekst';
   const s1=sec(B,'Indhold');
   const ta=el('textarea');ta.value=tx.text;ta.rows=2;
-  ta.oninput=()=>{tx.text=ta.value;markDirty();invalidate();renderTL()};
+  ta.oninput=()=>{tx.text=ta.value;markDirty('tekst');invalidate();renderTL()};
   s1.appendChild(ta);
   num(s1,'Start (s)',tx,'start',0,36000,0.1,{tl:1});
   num(s1,'Varighed (s)',tx,'dur',0.1,3600,0.1,{tl:1});
@@ -1479,7 +1483,7 @@ function inspText(B,tx){
   [[8,10],[50,10],[92,10],[8,50],[50,50],[92,50],[8,90],[50,90],[92,90]].forEach(([x,y],i)=>{
     const b=el('button',null,ICO('dot','gi--sm'));
     b.title=POS9[i];b.setAttribute('aria-label',POS9[i]);
-    b.onclick=()=>{tx.x=x;tx.y=y;markDirty();invalidate();renderInsp()};g.appendChild(b);
+    b.onclick=()=>{tx.x=x;tx.y=y;markDirty('placering');invalidate();renderInsp()};g.appendChild(b);
   });
   const gr=row('Hurtig');gr.appendChild(g);s2.appendChild(gr);
   const s3=sec(B,'Udseende');
@@ -1503,7 +1507,7 @@ function inspSub(B,su){
   $('inspTitle').textContent='Undertekst';
   const s1=sec(B,'Denne undertekst');
   const ta=el('textarea');ta.value=su.text;ta.rows=2;
-  ta.oninput=()=>{su.text=ta.value;markDirty();invalidate();renderTL()};
+  ta.oninput=()=>{su.text=ta.value;markDirty('undertekst');invalidate();renderTL()};
   s1.appendChild(ta);
   num(s1,'Start (s)',su,'start',0,36000,0.1,{tl:1});
   num(s1,'Varighed (s)',su,'dur',0.1,600,0.1,{tl:1});
@@ -1575,10 +1579,10 @@ function inspProject(B){
   resSel.onchange=()=>{
     if(resSel.value==='cur')return;
     const[w,h]=resSel.value.split('x').map(Number);
-    S.proj.w=w;S.proj.h=h;S.projManual=true;applyProjSize();markDirty();
+    S.proj.w=w;S.proj.h=h;S.projManual=true;applyProjSize();markDirty('format');
   };
   const rr=row('Opløsning');rr.appendChild(resSel);s1.appendChild(rr);
-  selBox(s1,'Billeder/sek',S.proj,'fps',['24','25','30','50','60'],v=>{S.proj.fps=+v;applyProjSize();markDirty()});
+  selBox(s1,'Billeder/sek',S.proj,'fps',['24','25','30','50','60'],v=>{S.proj.fps=+v;applyProjSize();markDirty('billeder/sek')});
   col(s1,'Baggrund',S.proj,'bg');
   const s2=sec(B,'Statistik');
   s2.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.8">
@@ -1687,6 +1691,7 @@ function relinkMissing(opts){
   }
   if(n&&!(opts&&opts.silent)){
     S.dirty=true;
+    if(typeof HIST!=='undefined'&&!HIST.timer)HIST.cur=snap();
     renderTL();renderInsp();invalidate();seekTo(clamp(S.t,0,totalDur()));
     toast(`${n} klip genforbundet med deres filer ✓`,'ok');
   }
@@ -1725,7 +1730,69 @@ function restorePrevAutosave(){
   if(typeof histReset==='function')histReset();
   toast('Forrige autosave gendannet ✓','ok');
 }
-function markDirty(){S.dirty=true}
+/* ================================================================
+   FORTRYD / GENTAG — snapshot-historik
+   Et trin er et JSON-snapshot af alt redigerbart (ingen medier: fid'er er
+   gyldige hele sessionen, S.files tømmes aldrig). markDirty() planlægger et
+   trin 400 ms efter sidste ændring og aldrig mens en knap/markør er nede,
+   så et helt slider-træk, et trim eller en omarrangering bliver ét trin.
+   Tekstfelter beholder browserens egen fortryd (tastaturlytteren nedenfor).
+   ================================================================ */
+const HIST={past:[],future:[],cur:null,label:null,timer:0};
+let ptrDown=false;
+addEventListener('pointerdown',()=>{ptrDown=true},true);
+addEventListener('pointerup',()=>{ptrDown=false},true);
+addEventListener('pointercancel',()=>{ptrDown=false},true);
+function snap(){return JSON.stringify({clips:S.clips,texts:S.texts,subs:S.subs,subStyle:S.subStyle,proj:S.proj,projManual:!!S.projManual,music:S.music})}
+function histReset(){clearTimeout(HIST.timer);HIST.timer=0;HIST.past=[];HIST.future=[];HIST.label=null;HIST.cur=snap();updUndoBtns()}
+function histCommit(){
+  if(ptrDown){HIST.timer=setTimeout(histCommit,250);return}
+  HIST.timer=0;
+  const s=snap(),label=HIST.label||'ændring';HIST.label=null;
+  if(HIST.cur==null){HIST.cur=s;return}
+  if(s===HIST.cur)return;
+  HIST.past.push({s:HIST.cur,label});
+  if(HIST.past.length>100)HIST.past.shift();
+  HIST.cur=s;HIST.future=[];updUndoBtns();
+}
+/* Et planlagt trin lægges i historikken med det samme (før fortryd). */
+function histFlush(){if(HIST.timer){clearTimeout(HIST.timer);const pd=ptrDown;ptrDown=false;histCommit();ptrDown=pd}}
+function restoreSnap(s){
+  const o=JSON.parse(s);
+  S.clips=o.clips;S.texts=o.texts;S.subs=o.subs;
+  Object.assign(S.subStyle,o.subStyle);Object.assign(S.proj,o.proj);
+  S.projManual=!!o.projManual;S.music=o.music==null?null:o.music;
+  relinkMissing({silent:true});   /* filer importeret siden trinnet blev taget */
+  applyProjSize();renderTL();renderInsp();
+  $('stageHint').style.display=S.clips.length?'none':'flex';
+  seekTo(clamp(S.t,0,totalDur()));
+  S.dirty=true;
+}
+function undo(){
+  histFlush();
+  const e=HIST.past.pop();if(!e){toast('Intet at fortryde');return}
+  HIST.future.push({s:HIST.cur,label:e.label});
+  restoreSnap(e.s);HIST.cur=snap();updUndoBtns();
+  toast('Fortrudt: '+e.label);
+}
+function redo(){
+  histFlush();
+  const e=HIST.future.pop();if(!e){toast('Intet at gentage');return}
+  HIST.past.push({s:HIST.cur,label:e.label});
+  restoreSnap(e.s);HIST.cur=snap();updUndoBtns();
+  toast('Gentaget: '+e.label);
+}
+function updUndoBtns(){
+  const u=$('btnUndo'),r=$('btnRedo');if(!u||!r)return;
+  u.disabled=!HIST.past.length;r.disabled=!HIST.future.length;
+  u.title=HIST.past.length?`Fortryd: ${HIST.past[HIST.past.length-1].label} (Ctrl+Z)`:'Fortryd (Ctrl+Z)';
+  r.title=HIST.future.length?`Gentag: ${HIST.future[HIST.future.length-1].label} (Ctrl+Y)`:'Gentag (Ctrl+Y / Ctrl+Shift+Z)';
+}
+function markDirty(label){
+  S.dirty=true;
+  if(label&&!HIST.label)HIST.label=String(label).toLowerCase();
+  clearTimeout(HIST.timer);HIST.timer=setTimeout(histCommit,400);
+}
 setInterval(()=>{if(S.dirty)writeAutosave()},3000);
 addEventListener('beforeunload',()=>{if(S.dirty)writeAutosave()});
 $('projName').oninput=()=>{S.dirty=true};
@@ -1776,6 +1843,14 @@ addEventListener('keydown',e=>{
   }
   if(expRunning)return;
   const tag=(e.target.tagName||'').toLowerCase();
+  /* Fortryd/gentag: i tekst- og talfelter er det browserens egen fortryd der
+     gælder; efter en slider, et farvevalg eller en afkrydsning er det vores. */
+  const textish=tag==='textarea'||(tag==='input'&&/^(text|number|search|email|url|tel|password)$/i.test(e.target.type||''));
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&!textish){
+    const k=e.key.toLowerCase();
+    if(k==='z'&&!e.shiftKey){e.preventDefault();undo();return}
+    if(k==='y'||(k==='z'&&e.shiftKey)){e.preventDefault();redo();return}
+  }
   if(tag==='input'||tag==='textarea'||tag==='select'){
     if(e.key==='Escape')e.target.blur();
     return;
@@ -1792,8 +1867,8 @@ addEventListener('keydown',e=>{
     case't':case'T':addTextAtPlayhead();break;
     case'u':case'U':addSubAtPlayhead();break;
     case'Delete':case'Backspace':deleteSelected();break;
-    case'i':case'I':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.in=clamp(c.in+ca.local*c.speed,0,c.out-0.08);renderTL();markDirty();toast('Ind-punkt sat')}break}
-    case'o':case'O':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.out=clamp(c.in+ca.local*c.speed,c.in+0.08,(fileOf(c)||{}).dur||c.out);renderTL();markDirty();toast('Ud-punkt sat')}break}
+    case'i':case'I':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.in=clamp(c.in+ca.local*c.speed,0,c.out-0.08);renderTL();markDirty('ind-punkt');toast('Ind-punkt sat')}break}
+    case'o':case'O':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.out=clamp(c.in+ca.local*c.speed,c.in+0.08,(fileOf(c)||{}).dur||c.out);renderTL();markDirty('ud-punkt');toast('Ud-punkt sat')}break}
     case'+':setZoom(S.pxPerSec*1.25);break;
     case'-':setZoom(S.pxPerSec*0.8);break;
     case'Escape':deselect();break;
@@ -2171,6 +2246,7 @@ function netBadgeUpdate(){
     }
   }
   netBadgeUpdate();
+  histReset();
   if(!window.showDirectoryPicker)console.warn('showDirectoryPicker utilgængelig — bruger mappe-input fallback');
   /* Bannere ligger i egen grid-række (2) under værktøjslinjen i stedet for
      fixed, så de ikke lægger sig over panelhovederne. #notices oprettes
