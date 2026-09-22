@@ -64,6 +64,7 @@ body{
   --clip:#0A505F;      /* cyan-dk  × sub-0 — video      */
   --text-blk:#5D330F;  /* amber-dk × sub-0 — tekst      */
   --sub-blk:#135134;   /* green-dk × sub-0 — undertekst */
+  --mus-blk:#5C1350;   /* magenta-dk × sub-0 — musik    */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -99,7 +100,7 @@ body{
   /* Række 2 er bannerrækken (#notices: kompatibilitet, smal skærm); tom = 0px.
      Panelerne har fast grid-row, så rækken aldrig forskyder dem. */
   /* --tlh: tidslinjens højde, kan trækkes i kanten øverst på #tl. */
-  display:grid;grid-template-rows:46px auto 1fr var(--tlh,270px) 24px;
+  display:grid;grid-template-rows:46px auto 1fr var(--tlh,300px) 24px;
   user-select:none;-webkit-user-select:none;
 }
 input,select,textarea,button{font:inherit;color:inherit}
@@ -186,6 +187,9 @@ input,select,textarea,button{font:inherit;color:inherit}
    noget andet end farve (SPEC regel 3). */
 .chip.on{background:var(--gt-sig);border-color:var(--gt-sig-dk);color:var(--gt-ink-on-lit);font-weight:700}
 .chip.on:hover{background:var(--gt-sig);border-color:var(--gt-sig-dk);filter:brightness(1.13)}
+/* Fire filter-chips (Alle/Video/Foto/Lyd) skal stå ved siden af "Medier" i 270 px. */
+#bin .panelHead{gap:5px}
+#bin .panelHead .chip{padding:3px 7px}
 #binGrid{flex:1;overflow-y:auto;padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;align-content:start}
 .mcard{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;position:relative;box-shadow:var(--gt-e-1);transition:border-color var(--gt-d-2) var(--gt-ease-soft),box-shadow var(--gt-d-2) var(--gt-ease-soft)}
 .mcard:hover{border-color:var(--gt-sig)}
@@ -299,9 +303,17 @@ body.focusMode #main{grid-template-columns:1fr}
 #tlInner{position:relative;height:100%;min-width:100%}
 #ruler{position:absolute;top:0;left:0;height:26px;cursor:pointer}
 .track{position:absolute;left:0;right:0;border-bottom:1px solid var(--line)}
-#trClips{top:26px;height:86px}
-#trTexts{top:112px;height:46px}
-#trSubs{top:158px;height:46px}
+/* Fem rækker: lineal 26 · video 80 · tekst 46 · undertekst 46 · musik 48.
+   Ændres de, skal #tlLabels og TLH_MIN følge med. */
+#trClips{top:26px;height:80px}
+#trTexts{top:106px;height:46px}
+#trSubs{top:152px;height:46px}
+#trMusic{top:198px;height:48px}
+/* Bølgeformen ligger UNDER sporene (musikblokken er halvgennemsigtig ovenpå),
+   beat-stregerne OVER dem, så de også ses hen over klippene. Begge følger
+   rulningen som linealen og fanger aldrig klik. */
+#waveCv,#beatCv{position:absolute;top:26px;left:0;pointer-events:none}
+#beatCv{z-index:6}
 .blk{position:absolute;top:4px;bottom:4px;border-radius:var(--gt-r-2);overflow:hidden;cursor:grab;border:1px solid var(--gt-lip)}
 .blk:active{cursor:grabbing}
 .blk.sel{outline:2px solid var(--gt-sig);outline-offset:0}
@@ -318,6 +330,12 @@ body.focusMode #main{grid-template-columns:1fr}
 .blk.clip .fxdot{position:absolute;left:5px;top:3px;font-size:var(--gt-t-xs);display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.55);color:var(--gt-warn-ink);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
 .blk.txt{background:var(--text-blk)}
 .blk.sub{background:var(--sub-blk)}
+/* Musik: pladen er halvgennemsigtig, så bølgeformen (tegnet under sporet)
+   står igennem; navnet får sin egen mørke plade som klipnavnet. */
+.blk.mus{background:rgba(92,19,80,.55);border-color:var(--gt-magenta-dk)}
+.blk.mus .lbl{top:3px;bottom:auto;right:auto;max-width:calc(100% - 12px);background:rgba(0,0,0,.62);padding:0 4px;border-radius:var(--gt-r-1);text-shadow:none;display:flex;align-items:center;gap:4px}
+.blk.mus.missing{background:repeating-linear-gradient(135deg,var(--gt-pl-2) 0 7px,var(--gt-sub-1) 7px 14px);border:1px dashed var(--err)}
+.blk.mus.missing .lbl{color:var(--err)}
 .hnd{position:absolute;top:0;bottom:0;width:9px;cursor:ew-resize;z-index:3}
 .hnd.l{left:0;border-radius:var(--gt-r-2) 0 0 var(--gt-r-2)}
 .hnd.r{right:0;border-radius:0 var(--gt-r-2) var(--gt-r-2) 0}
@@ -400,6 +418,7 @@ textarea:focus-visible,
 @media (pointer:coarse){
   .hnd{width:18px}
   .chip{padding:5px 12px}
+  #bin .panelHead .chip{padding:5px 7px}
   input[type=range]{height:24px;background:linear-gradient(var(--gt-edge-hair),var(--gt-edge-hair)) center/100% 4px no-repeat}
   input[type=range]::-webkit-slider-thumb{width:20px;height:20px}
   .row input[type=checkbox],#snapChk{width:24px;height:24px}
@@ -435,6 +454,7 @@ textarea:focus-visible,
       <span class="chip on" data-f="all" role="button" tabindex="0">Alle</span>
       <span class="chip" data-f="video" role="button" tabindex="0">Video</span>
       <span class="chip" data-f="image" role="button" tabindex="0">Foto</span>
+      <span class="chip" data-f="audio" role="button" tabindex="0">Lyd</span>
     </div>
     <div id="binBar">
       <label for="binSort">Sortér</label>
@@ -510,16 +530,20 @@ textarea:focus-visible,
   <div id="tlBody">
     <div id="tlLabels">
       <div style="height:26px"></div>
-      <div style="height:86px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg> Video</div>
+      <div style="height:80px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg> Video</div>
       <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</div>
       <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</div>
+      <div style="height:48px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-music"></use></svg> Musik</div>
     </div>
     <div id="tlScroll">
       <div id="tlInner">
         <canvas id="ruler" height="26"></canvas>
+        <canvas id="waveCv"></canvas>
         <div class="track" id="trClips"></div>
         <div class="track" id="trTexts"></div>
         <div class="track" id="trSubs"></div>
+        <div class="track" id="trMusic"></div>
+        <canvas id="beatCv"></canvas>
         <div id="tlEmpty">Tidslinjen er tom — dobbeltklik på medier i biblioteket for at tilføje dem</div>
         <div class="ghostLine" id="ghostLine"></div>
         <div id="playhead"></div>
@@ -568,7 +592,7 @@ textarea:focus-visible,
 
 <div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="dropOverlay">Slip filerne her</div>
-<input type="file" id="fileInput" multiple accept="video/*,image/*,.mp4,.mov,.m4v,.webm,.mkv,.jpg,.jpeg,.png,.webp,.gif" style="display:none">
+<input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*,.mp4,.mov,.m4v,.webm,.mkv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac" style="display:none">
 <input type="file" id="dirInput" webkitdirectory style="display:none">
 <input type="file" id="projInput" accept=".json" style="display:none">
 
@@ -604,7 +628,11 @@ function toast(msg,cls,opts){
   setTimeout(gone,opts.ms||(opts.action?9000:cls==='err'?5200:2600));
   return d;
 }
-const VID_EXT=/\.(mp4|mov|m4v|webm|mkv)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|bmp)$/i;
+const VID_EXT=/\.(mp4|mov|m4v|webm|mkv)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|bmp)$/i, AUD_EXT=/\.(mp3|wav|m4a|aac|ogg|opus|flac)$/i;
+/* Alle importveje (Åbn mappe, Filer, mappe-fallback, træk-og-slip, GenStudio)
+   bruger samme filter, så en lydfil aldrig sorteres stille fra ét sted. */
+const isMediaName=n=>VID_EXT.test(n)||IMG_EXT.test(n)||AUD_EXT.test(n);
+const kindOfName=n=>VID_EXT.test(n)?'video':AUD_EXT.test(n)?'audio':'image';
 
 /* ---------- Tilstand ---------- */
 const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0};
@@ -613,14 +641,15 @@ const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0};
    px/py (= pxs:px, pxe:-px), som applyProject omregner. */
 const defaultKb=()=>({zs:1.0,ze:1.1,pxs:0,pxe:0,pys:0,pye:0});
 const S={
-  files:[],            // {id,name,size,mtime,file,url,type,dur,w,h,thumb,err}
+  files:[],            // {id,name,size,mtime,file,url,type:'video'|'image'|'audio',dur,w,h,thumb,err,peaks?,abuf?}
   clips:[],            // {id,fid,type,in,out,speed,volume,fadeIn,fadeOut,fit,fx,imgDur,kb:{zs,ze,pxs,pxe,pys,pye},missing?:{name,size}}
   texts:[],            // {id,text,start,dur,x,y,size,color,font,bold,outline,oColor,bg,bgColor,align,fade}
   subs:[],             // {id,start,dur,text}
   subStyle:{size:44,color:'#ffffff',oColor:'#000000',outline:5,margin:7,bg:false,pos:'bund'},
   proj:{w:1080,h:1920,fps:30,bg:'#000000'},
-  /* Fase B (musikspor): S.music kommer med i fortryd-historikken (snap) og i
-     genforbindelsen (mediaRefs) uden yderligere ændringer dér. */
+  /* Ét musikspor: {fid,start,in,volume,fadeIn,fadeOut,fileDur,grid,pulse,missing?}
+     start = hvor på tidslinjen filen begynder at lyde, in = hvor i filen.
+     Med i fortryd-historikken (snap), autosave, projektfil og genforbindelse. */
   music:null,
   t:0, playing:false, sel:{kind:null,id:null}, filter:'all',
   pxPerSec:60, masterVol:1, dirty:false, dirHandle:null
@@ -652,7 +681,7 @@ async function importFromDirHandle(dh,opts){
   idbSet('dirHandle',dh).catch(()=>{});
   const files=[];
   for await(const e of dh.values()){
-    if(e.kind==='file'&&!e.name.startsWith('.')&&(VID_EXT.test(e.name)||IMG_EXT.test(e.name)))
+    if(e.kind==='file'&&!e.name.startsWith('.')&&isMediaName(e.name))
       files.push(await e.getFile());
   }
   $('btnRefreshDir').style.display='inline-flex';
@@ -702,8 +731,8 @@ $('btnOpenDir').onclick=openDirPicker;
   };
 })();
 $('btnAddFiles').onclick=()=>$('fileInput').click();
-$('dirInput').onchange=e=>addMediaFiles([...e.target.files].filter(f=>!f.name.startsWith('.')&&(VID_EXT.test(f.name)||IMG_EXT.test(f.name))));
-$('fileInput').onchange=e=>addMediaFiles([...e.target.files]);
+$('dirInput').onchange=e=>addMediaFiles([...e.target.files].filter(f=>!f.name.startsWith('.')&&isMediaName(f.name)));
+$('fileInput').onchange=e=>{addMediaFiles([...e.target.files]);e.target.value=''};
 
 /* Træk-og-slip */
 let dragDepth=0;
@@ -712,8 +741,9 @@ addEventListener('dragleave',e=>{e.preventDefault();if(--dragDepth<=0){dragDepth
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{
   e.preventDefault();dragDepth=0;$('dropOverlay').style.display='none';
-  const fs=[...e.dataTransfer.files].filter(f=>VID_EXT.test(f.name)||IMG_EXT.test(f.name));
+  const all=[...e.dataTransfer.files],fs=all.filter(f=>isMediaName(f.name));
   if(fs.length)addMediaFiles(fs);
+  else if(all.length)toast('Ingen video-, billed- eller lydfiler blandt de slupne filer','err');
 });
 
 async function addMediaFiles(files,opts){
@@ -726,7 +756,7 @@ async function addMediaFiles(files,opts){
       const old=S.files.find(x=>x.name===f.name);
       if(!old)continue;
       try{URL.revokeObjectURL(old.url)}catch(e){}
-      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true});
+      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null});
       for(const v of[vA,vB])if(v._fid===old.id){v._fid=null;v._cid=null}
       replaced.push(old);
     }
@@ -736,7 +766,7 @@ async function addMediaFiles(files,opts){
   if(!files.length&&!replaced.length){toast(opts.refresh?'Ingen nye medier i mappen':'Ingen nye mediefiler fundet');return}
   const items=files.map(f=>({
     id:uid(),name:f.name,size:f.size,mtime:f.lastModified||0,file:f,url:URL.createObjectURL(f),
-    type:VID_EXT.test(f.name)?'video':'image',dur:0,w:0,h:0,thumb:null,err:null,probing:true
+    type:kindOfName(f.name),dur:0,w:0,h:0,thumb:null,err:null,probing:true
   }));
   S.files.push(...items);
   renderBin();
@@ -745,8 +775,8 @@ async function addMediaFiles(files,opts){
   const worker=async()=>{
     while(queue.length){
       const it=queue.shift();
-      try{ it.type==='video'?await probeVideo(it):await probeImage(it); }
-      catch(e){ it.err='Kan ikke læses'; }
+      try{ it.type==='video'?await probeVideo(it):it.type==='audio'?await probeAudio(it):await probeImage(it); }
+      catch(e){ it.err=it.type==='audio'?'Lydfilen kan ikke afkodes':'Kan ikke læses'; }
       it.probing=false;done++;
       $('binCount').textContent=`Analyserer medier… ${done}/${N}`;
       renderBinCard(it);
@@ -755,6 +785,8 @@ async function addMediaFiles(files,opts){
   await Promise.all([0,1,2,3].map(worker));
   /* Erstattede videoer kan være blevet kortere: hold klippenes Ud indenfor. */
   for(const it of replaced)if(it.type==='video'&&it.dur>0)for(const c of S.clips)if(c.fid===it.id){c.out=Math.min(c.out,it.dur);if(c.in>c.out-0.05)c.in=Math.max(0,c.out-0.05)}
+  /* Erstattet musikfil: ny længde, og bufferen hentes igen. */
+  if(S.music&&replaced.some(it=>it.id===S.music.fid)){const it=fileOf(S.music);if(it&&it.dur>0){S.music.fileDur=it.dur;S.music.in=Math.min(S.music.in,Math.max(0,it.dur-0.5))}if(S.playing)pause();ensureMusicBuf()}
   if(replaced.length){renderTL();invalidate()}
   renderBin();
   relinkMissing();
@@ -813,6 +845,46 @@ function probeImage(it){
     im.src=it.url;
   });
 }
+/* Lyd afkodes én gang (OfflineAudioContext ved 48 kHz — samme rate som
+   MP4-miksningen) til varighed, bølgeform-toppe og en lille bølgeform som
+   miniature. Selve bufferen (≈ 23 MB pr. stereo-minut) beholdes kun for
+   musiksporets fil; ensureMusicBuf() afkoder igen når en anden fil bliver musik. */
+const PEAK_RATE=200;   /* bølgeform-toppe pr. sekund */
+async function decodeAudioFile(file){
+  const ab=await file.arrayBuffer();
+  return await new OfflineAudioContext(2,1,48000).decodeAudioData(ab);
+}
+function computePeaks(buf){
+  const n=Math.max(1,Math.ceil(buf.duration*PEAK_RATE)),out=new Float32Array(n),hop=buf.sampleRate/PEAK_RATE;
+  for(let ch=0;ch<buf.numberOfChannels;ch++){
+    const d=buf.getChannelData(ch);
+    for(let k=0;k<n;k++){
+      let m=out[k];const b=Math.min(d.length,Math.floor((k+1)*hop));
+      for(let i=Math.floor(k*hop);i<b;i++){const v=d[i]<0?-d[i]:d[i];if(v>m)m=v}
+      out[k]=m;
+    }
+  }
+  return out;
+}
+function waveThumb(peaks){
+  const W=200,H=125,c=document.createElement('canvas');c.width=W;c.height=H;
+  const g=c.getContext('2d');g.fillStyle='#0d0a12';g.fillRect(0,0,W,H);
+  let mx=1e-3;for(const p of peaks)if(p>mx)mx=p;
+  g.fillStyle='#FF7BE6';   /* magenta-ink, som musiksporet */
+  const per=peaks.length/W;
+  for(let x=0;x<W;x++){
+    let m=0;const b=Math.min(peaks.length,Math.ceil((x+1)*per));
+    for(let k=Math.floor(x*per);k<b;k++)if(peaks[k]>m)m=peaks[k];
+    const h=Math.max(1,m/mx*(H*0.42));g.fillRect(x,H/2-h,1,h*2);
+  }
+  return c.toDataURL('image/png');
+}
+async function probeAudio(it){
+  const buf=await decodeAudioFile(it.file);
+  if(!(buf.duration>0))throw new Error('tom lydfil');
+  it.dur=buf.duration;it.peaks=computePeaks(buf);it.peakMax=it.peaks.reduce((a,b)=>b>a?b:a,1e-3);it.thumb=waveThumb(it.peaks);
+  if(S.music&&S.music.fid===it.id)it.abuf=buf;
+}
 
 /* ---------- Bibliotek (UI) ---------- */
 /* Kun filter-chipsene (data-f) — en anden .chip må aldrig sætte S.filter. */
@@ -837,20 +909,21 @@ function renderBin(){
     g.innerHTML=`<div id="binEmpty"><div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg></div>Klik på <b><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-folder-open"></use></svg> Åbn mappe</b> og vælg din Camera-mappe.<br><br>Du kan også trække filer direkte herind.</div>`;
   }
   for(const it of list)g.appendChild(binCard(it));
-  const nv=S.files.filter(f=>f.type==='video').length;
-  $('binCount').textContent=S.files.length?`${S.files.length} medier · ${nv} videoer · ${S.files.length-nv} fotos`:'0 medier';
+  const nv=S.files.filter(f=>f.type==='video').length,na=S.files.filter(f=>f.type==='audio').length;
+  $('binCount').textContent=S.files.length?`${S.files.length} medier · ${nv} videoer · ${S.files.length-nv-na} fotos${na?` · ${na} lyd`:''}`:'0 medier';
   updateAddAll();
 }
-/* Knappen i bunden: "Læg N markerede på" ved multivalg, ellers alle viste. */
+/* Knappen i bunden: "Læg N markerede på" ved multivalg, ellers alle viste.
+   Lydfiler tæller ikke med: de bliver musik, ikke klip. */
 function updateAddAll(){
-  const b=$('btnAddAll'),list=binList();
+  const b=$('btnAddAll'),list=binList().filter(f=>f.type!=='audio');
   const sel=list.filter(f=>S.binSel.has(f.id));
   if(sel.length>1){b.textContent=`Læg ${sel.length} markerede på`;b.title='Læg de markerede medier på tidslinjen i den viste rækkefølge';b.style.display=''}
   else if(list.length>1){b.textContent=`Læg alle ${list.length} på`;b.title='Læg alle viste medier på tidslinjen i den viste rækkefølge';b.style.display=''}
   else b.style.display='none';
 }
 $('btnAddAll').onclick=()=>{
-  const list=binList(),sel=list.filter(f=>S.binSel.has(f.id));
+  const list=binList().filter(f=>f.type!=='audio'),sel=list.filter(f=>S.binSel.has(f.id));
   addClips(sel.length>1?sel:list);
 };
 function binCard(it){
@@ -859,12 +932,15 @@ function binCard(it){
   d.dataset.id=it.id;
   d.tabIndex=0;d.setAttribute('role','button');
   const when=it.mtime?new Date(it.mtime).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const TYP={video:['Video','gi-play'],image:['Billede','gi-image'],audio:['Lyd','gi-music']}[it.type]||['Billede','gi-image'];
+  const addTxt=it.type==='audio'?'Brug som musik':'Læg på tidslinjen';
+  const isMus=it.type==='audio'&&S.music&&S.music.fid===it.id;
   d.innerHTML=`
     ${it.thumb?`<img class="th" src="${it.thumb}" alt="">`:`<div class="th" style="display:flex;align-items:center;justify-content:center;color:var(--faint)">${it.probing?'…':'—'}</div>`}
-    <div class="typ" title="${it.type==='video'?'Video':'Billede'}"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#${it.type==='video'?'gi-play':'gi-image'}"></use></svg></div>
-    ${it.type==='video'&&it.dur?`<div class="dur">${fmtDur(it.dur)}</div>`:''}
+    <div class="typ" title="${TYP[0]}${isMus?' · projektets musik':''}"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#${TYP[1]}"></use></svg>${isMus?'&nbsp;Musik':''}</div>
+    ${(it.type==='video'||it.type==='audio')&&it.dur?`<div class="dur">${fmtDur(it.dur)}</div>`:''}
     ${it.err?`<div class="bad"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg> ${esc(it.err)}</div>`:''}
-    <button class="addBtn" title="Læg på tidslinjen" aria-label="Læg på tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-file-plus"></use></svg></button>
+    <button class="addBtn" title="${addTxt}" aria-label="${addTxt}"><svg class="gi" aria-hidden="true"><use href="icons.svg#${it.type==='audio'?'gi-music':'gi-file-plus'}"></use></svg></button>
     <div class="nm" title="${esc(it.name)}${when?' · '+esc(when):''}">${esc(it.name)}</div>`;
   d.onclick=e=>{
     if(e.target.classList.contains('addBtn')){addClipFromFile(it);return}
@@ -892,11 +968,13 @@ function renderBinCard(it){
 }
 
 /* ---------- Klip på tidslinjen ---------- */
-const clipUsable=it=>!it.err&&!it.probing&&(it.type!=='video'||(Number.isFinite(it.dur)&&it.dur>0));
+const clipUsable=it=>!it.err&&!it.probing&&(it.type==='image'||(Number.isFinite(it.dur)&&it.dur>0));
 function addClipFromFile(it,atIndex,opts){
   opts=opts||{};
   if(it.err){toast('Filen kan ikke bruges: '+it.err,'err');return null}
   if(it.probing){toast('Vent — filen analyseres stadig');return null}
+  /* En lydfil bliver projektets musikspor, ikke et klip. */
+  if(it.type==='audio'){setMusicFromFile(it);return null}
   if(it.type==='video'&&!(Number.isFinite(it.dur)&&it.dur>0)){toast('Videoens længde kan ikke bestemmes, så filen kan ikke bruges','err');return null}
   const c=it.type==='video'
     ?{id:uid(),fid:it.id,type:'video',in:0,out:it.dur,speed:1,volume:1,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF}}
@@ -922,6 +1000,10 @@ function addClipFromFile(it,atIndex,opts){
 }
 /* Læg flere medier på tidslinjen i den givne rækkefølge — ét fortryd-trin. */
 function addClips(items){
+  /* Lyd i udvalget: den første bliver musik, hvis projektet ikke har noget. */
+  const aud=items.filter(f=>f.type==='audio'&&clipUsable(f));
+  items=items.filter(f=>f.type!=='audio');
+  if(aud.length&&!S.music){setMusicFromFile(aud[0]);if(!items.length)return}
   const ok=items.filter(clipUsable),skip=items.length-ok.length;
   if(!ok.length){toast('Ingen af medierne kan bruges endnu','err');return}
   const wasEmpty=!S.clips.length;let last=null;
@@ -1208,10 +1290,12 @@ function play(){
   const ca=clipAt(S.t);if(!ca)return;
   S.playing=true;$('btnPlayIcon').setAttribute('href','icons.svg#gi-pause');
   lastWall=performance.now();
+  if(S.music)musicStart();
   startClip(ca.i,ca.local);
 }
 function pause(){
   S.playing=false;$('btnPlayIcon').setAttribute('href','icons.svg#gi-play');
+  musicStop();
   vA.pause();vB.pause();invalidate();
 }
 function togglePlay(){S.playing?pause():play()}
@@ -1234,11 +1318,136 @@ function seekTo(t,keepPlaying){
   invalidate();
   if(was||keepPlaying)play();
 }
+/* ================================================================
+   MUSIK — model og afspilning
+   Uden musik kører motoren som før (videoelementet er uret). Med en
+   afkodet musikfil er AudioContext uret: S.t regnes fra lydens udgangstid,
+   og videoen følger med (afspilningshastigheden justeres let, og der
+   springes ved store afvigelser). Så kan musikken ikke glide fra billedet,
+   uanset hvor mange klipskift der er, og klipskift giver ingen hak i lyden.
+   ================================================================ */
+const MUS={on:false,src:null,gain:null,bus:null,t0:0,ctx0:0,when:0,from:0};
+const musicFile=()=>S.music&&!S.music.missing&&S.music.fid?fileOf(S.music):null;
+/* Filens længde: den afkodede, ellers den der blev gemt med projektet. */
+function musicFileDur(){const m=S.music;if(!m)return 0;const it=musicFile();return it&&it.dur>0?it.dur:(m.fileDur||0)}
+/* Musikblokkens fulde udstrækning (også forbi videoens slutning). */
+function musicSpanEnd(){const m=S.music;return m?m.start+Math.max(0,musicFileDur()-m.in):0}
+/* Hvor musikken holder op med at lyde: filens slutning eller videoens. */
+function musicEndT(){return S.music?Math.min(musicSpanEnd(),totalDur()):0}
+/* Lydstyrke på tidslinjen: fade ind fra musikkens start, fade ud mod dens
+   slutning (filens eller videoens, det der kommer først). Lineær som klippenes. */
+function musicGainAt(m,t,end){
+  const a=t-m.start;let g=1;
+  if(m.fadeIn>0&&a<m.fadeIn)g=Math.min(g,Math.max(0,a)/m.fadeIn);
+  if(m.fadeOut>0&&end-t<m.fadeOut)g=Math.min(g,Math.max(0,end-t)/m.fadeOut);
+  return clamp(g,0,1)*clamp(m.volume,0,1);
+}
+/* Samme kurve i preview og MP4: 100 punkter i sekundet som eneste
+   automations-hændelse på gain-noden (kurver må ikke overlappe andre). */
+function applyMusicGain(param,m,from,end,when){
+  const dur=end-from;
+  if(!(m.fadeIn>0||m.fadeOut>0)||!(dur>0)){param.value=musicGainAt(m,from,end);return}
+  const N=Math.max(2,Math.ceil(dur*100)+1),curve=new Float32Array(N);
+  for(let k=0;k<N;k++)curve[k]=musicGainAt(m,from+dur*k/(N-1),end);
+  param.setValueCurveAtTime(curve,when,dur);
+}
+function ensureMusicBuf(){
+  const it=musicFile();
+  if(!it||it.err||it.probing)return Promise.resolve(null);
+  if(it.abuf)return Promise.resolve(it.abuf);
+  if(!it.abufP)it.abufP=decodeAudioFile(it.file).then(buf=>{
+    it.abufP=null;
+    if(!S.music||S.music.fid!==it.id)return buf;   /* blev skiftet ud imens */
+    it.abuf=buf;if(!it.peaks){it.peaks=computePeaks(buf);it.peakMax=it.peaks.reduce((a,b)=>b>a?b:a,1e-3)}
+    drawRuler();
+    if(S.playing&&!MUS.on)musicStart();
+    return buf;
+  },e=>{it.abufP=null;console.warn('Musikken kunne ikke afkodes',e);toast('Musikfilen kan ikke afkodes: '+it.name,'err');return null});
+  return it.abufP;
+}
+function setMusicFromFile(it){
+  if(it.err){toast('Filen kan ikke bruges: '+it.err,'err');return}
+  if(it.probing){toast('Vent — filen analyseres stadig');return}
+  if(S.music&&S.music.fid===it.id){select('music',null);return}
+  const old=S.music;
+  /* En ny sang får nyt ind-punkt og intet beat-grid; placering, lydstyrke og fades bevares. */
+  S.music={fid:it.id,start:old?old.start:0,in:0,volume:old?old.volume:1,fadeIn:old?old.fadeIn:0,fadeOut:old?old.fadeOut:0,fileDur:it.dur,grid:null,pulse:0};
+  for(const f of S.files)if(f.type==='audio'&&f.id!==it.id)f.abuf=null;
+  if(S.playing)pause();
+  ensureMusicBuf();
+  select('music',null);renderTL();renderBin();markDirty(old?'skift musik':'tilføj musik');
+  toast(`Musik: ${it.name}`,'ok');
+}
+function removeMusic(){
+  if(!S.music)return;
+  if(S.playing)pause();
+  S.music=null;
+  if(S.sel.kind==='music')deselect();
+  renderTL();renderBin();markDirty('fjern musik');invalidate();
+}
+/* Lydens udgangstid (det der høres nu) frem for render-tiden. */
+function acNow(ac){
+  if(ac.getOutputTimestamp){const o=ac.getOutputTimestamp();if(o&&o.contextTime>0&&o.performanceTime>0)return o.contextTime+(performance.now()-o.performanceTime)/1000}
+  return ac.currentTime;
+}
+function musicStop(){
+  MUS.on=false;
+  if(MUS.src){try{MUS.src.stop()}catch(e){}try{MUS.src.disconnect()}catch(e){}MUS.src=null}
+  if(MUS.gain){try{MUS.gain.disconnect()}catch(e){}MUS.gain=null}
+}
+/* Start musikken (og musik-uret) fra S.t. Uden afkodet fil eller uden
+   kørende AudioContext kører den gamle motor videre indtil videre. */
+function musicStart(){
+  musicStop();
+  const it=musicFile();if(!it)return;
+  if(!it.abuf){ensureMusicBuf();return}
+  const g=ensureAudioGraph(),ac=g.ac;
+  if(ac.state!=='running'){ac.resume().then(()=>{if(S.playing&&!MUS.on&&ac.state==='running')musicStart()}).catch(()=>{});return}
+  if(!MUS.bus){MUS.bus=ac.createGain();MUS.bus.connect(g.master)}
+  MUS.bus.gain.value=S.masterVol;
+  const m=S.music,end=musicEndT();
+  MUS.t0=S.t;MUS.ctx0=ac.currentTime+0.05;MUS.on=true;
+  if(!(end>S.t+0.005))return;   /* uret kører, men musikken er slut */
+  const from=Math.max(S.t,m.start),when=MUS.ctx0+(from-S.t);
+  const src=ac.createBufferSource();src.buffer=it.abuf;
+  const gn=ac.createGain();applyMusicGain(gn.gain,m,from,end,when);
+  src.connect(gn).connect(MUS.bus);
+  src.start(when,m.in+(from-m.start),end-from);
+  MUS.src=src;MUS.gain=gn;MUS.when=when;MUS.from=from;
+}
+/* Musikken er ændret under afspilning: start den igen fra S.t — samlet op,
+   så et helt slider-træk ikke genstarter lyden 60 gange i sekundet. */
+let musRestartT=0;
+function musicChanged(){clearTimeout(musRestartT);if(S.playing)musRestartT=setTimeout(()=>{if(S.playing)musicStart()},150)}
+/* Ét billede med musik-uret: S.t fra lyden, klipskift fra S.t, videoen
+   holdes på S.t (hastighed ±25 % under 0,3 s afvigelse, ellers spring). */
+function musicTick(){
+  const tot=totalDur(),now=acNow(audioGraph.ac);
+  /* Før lyden er nået ud (første afspilning åbner lydenheden, det kan tage
+     et øjeblik) står uret stille — og billedet venter på det. */
+  const waiting=now<MUS.ctx0;
+  S.t=Math.min(tot,MUS.t0+Math.max(0,now-MUS.ctx0));
+  if(S.t>=tot-1e-4){pause();S.t=tot;return}
+  const ca=clipAt(S.t);if(!ca)return;
+  if(ca.i!==curIdx){startClip(ca.i,ca.local);return}
+  const c=ca.c;if(!isVid(c))return;
+  applyClipVolume(c,ca.local);
+  const el=vActive;if(el._cid!==c.id)return;
+  if(waiting){if(!el.paused)el.pause();return}
+  if(el.paused&&!el.ended&&!el._playReq){el._playReq=true;el.play().catch(()=>{}).finally(()=>{el._playReq=false})}
+  if(el.seeking||el.readyState<2)return;
+  const want=c.in+ca.local*c.speed,dr=el.currentTime-want;
+  if(Math.abs(dr)>0.3){try{el.currentTime=Math.max(0,want+0.03)}catch(e){}return}
+  const r=Math.abs(dr)<0.012?c.speed:clamp(c.speed*(1-clamp(dr*2.5,-0.25,0.25)),0.0625,16);
+  if(Math.abs(el.playbackRate-r)>0.004)el.playbackRate=r;
+}
 /* Hovedloop */
 function tick(now){
   requestAnimationFrame(tick);
   const dt=(now-lastWall)/1000;lastWall=now;
-  if(S.playing&&curIdx>=0&&curIdx<S.clips.length){
+  if(MUS.bus&&Math.abs(MUS.bus.gain.value-S.masterVol)>1e-4)MUS.bus.gain.value=S.masterVol;
+  if(S.playing&&MUS.on){musicTick();needsDraw=true}
+  else if(S.playing&&curIdx>=0&&curIdx<S.clips.length){
     const c=S.clips[curIdx],start=clipStart(curIdx),d=clipDur(c);
     if(isVid(c)){
       const el=vActive,local=clamp((el.currentTime-c.in)/c.speed,0,d);
@@ -1292,12 +1501,15 @@ function select(kind,id){
   if(typeof updateAddAll==='function')updateAddAll();
   document.querySelectorAll('.blk.sel').forEach(x=>x.classList.remove('sel'));
   if(kind==='clip'||kind==='text'||kind==='sub'){const el=document.querySelector(`.blk[data-id="${id}"]`);if(el)el.classList.add('sel')}
+  if(kind==='music'){const el=document.querySelector('.blk.mus');if(el)el.classList.add('sel')}
   renderInsp();updateSelStatus();
 }
 function deselect(){select(null,null)}
+const musicName=()=>S.music?(S.music.missing?S.music.missing.name:((fileOf(S.music)||{}).name||'?')):'';
 function updateSelStatus(){
   const k=S.sel.kind;let s='';
   if(k==='clip'){const c=S.clips.find(x=>x.id===S.sel.id);s=c?`Valgt: ${c.missing?'mangler fil — ':''}${clipName(c)} (${fmtDur(clipDur(c))})`:''}
+  else if(k==='music')s=S.music?`Valgt: musik — ${S.music.missing?'mangler fil — ':''}${musicName()}`:'';
   else if(k==='text')s='Valgt: tekst';
   else if(k==='sub')s='Valgt: undertekst';
   else if(k==='file'){const f=S.files.find(x=>x.id===S.sel.id);s=f?`Valgt i bibliotek: ${f.name}`:''}
@@ -1308,10 +1520,17 @@ const selClip=()=>S.sel.kind==='clip'?S.clips.find(c=>c.id===S.sel.id):null;
 const selText=()=>S.sel.kind==='text'?S.texts.find(c=>c.id===S.sel.id):null;
 const selSub =()=>S.sel.kind==='sub' ?S.subs.find(c=>c.id===S.sel.id):null;
 
-function snapT(t,ignoreId){
+/* opts.noPlayhead: markøren er ikke et mål (den følger selv kanten under trim)
+   opts.clipsUntil: kun klipgrænser til og med dette klips start (resten flytter sig)
+   opts.noBeats: ingen beat-mål (når selve musikken trækkes) */
+function snapT(t,ignoreId,opts){
+  opts=opts||{};
   if(!$('snapChk').checked)return Math.max(0,t);
-  const tol=8/S.pxPerSec,cand=[0,S.t];
-  let acc=0;for(const c of S.clips){cand.push(acc);acc+=clipDur(c)}cand.push(acc);
+  const tol=8/S.pxPerSec,cand=[0];
+  if(!opts.noPlayhead)cand.push(S.t);
+  let acc=0;
+  for(let i=0;i<S.clips.length;i++){if(opts.clipsUntil!=null&&i>opts.clipsUntil)break;cand.push(acc);acc+=clipDur(S.clips[i])}
+  if(opts.clipsUntil==null)cand.push(acc);
   for(const x of S.texts)if(x.id!==ignoreId)cand.push(x.start,x.start+x.dur);
   for(const x of S.subs)if(x.id!==ignoreId)cand.push(x.start,x.start+x.dur);
   cand.push(Math.round(t));
@@ -1322,7 +1541,7 @@ function snapT(t,ignoreId){
 
 function renderTL(){
   const total=totalDur();
-  const wpx=Math.max(tlScroll.clientWidth,total*S.pxPerSec+260);
+  const wpx=Math.max(tlScroll.clientWidth,Math.max(total,musicSpanEnd())*S.pxPerSec+260);
   tlInner.style.width=wpx+'px';
   $('tlEmpty').style.display=S.clips.length?'none':'block';
   /* Klip-spor */
@@ -1354,7 +1573,26 @@ function renderTL(){
   });
   renderOverlayTrack($('trTexts'),S.texts,'txt','text');
   renderOverlayTrack($('trSubs'),S.subs,'sub','sub');
+  renderMusicTrack();
   drawRuler();updateTimeUI();
+}
+/* Musiksporet: én blok fra start med filens resterende længde. Bølgeformen
+   tegnes af drawWave() på lærredet under sporet (se drawRuler). */
+function renderMusicTrack(){
+  const tr=$('trMusic');tr.innerHTML='';
+  const m=S.music;if(!m)return;
+  const len=Math.max(0,musicFileDur()-m.in),name=musicName();
+  const b=document.createElement('div');
+  b.className='blk mus'+(m.missing?' missing':'')+(S.sel.kind==='music'?' sel':'');
+  b.tabIndex=0;b.setAttribute('role','button');
+  b.setAttribute('aria-label',`Musik: ${m.missing?'mangler fil ':''}${name}`);
+  b.addEventListener('click',e=>{if(e.detail===0)select('music',null)});
+  b.style.left=(m.start*S.pxPerSec)+'px';
+  b.style.width=Math.max(14,(len||4)*S.pxPerSec-2)+'px';
+  b.title='Træk for at flytte musikken · venstre kant: klip starten af sangen væk';
+  b.innerHTML=`<div class="lbl"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-music"></use></svg>${m.missing?'Mangler: ':''}${esc(name)}</div><div class="hnd l"></div>`;
+  attachMusicEvents(b,m);
+  tr.appendChild(b);
 }
 function renderOverlayTrack(tr,arr,cls,kind){
   tr.innerHTML='';
@@ -1458,6 +1696,35 @@ function attachOverlayEvents(b,x,kind){
     b.addEventListener('pointermove',move);b.addEventListener('pointerup',up);
   });
 }
+/* ---------- Musik-interaktion: flyt + trim af starten ----------
+   Krop: flyt hele sangen (start). Venstre kant: klip starten af sangen væk
+   — in og start flyttes lige meget, så resten af lyden bliver liggende. */
+function attachMusicEvents(b,m){
+  b.addEventListener('pointerdown',e=>{
+    e.preventDefault();e.stopPropagation();
+    select('music',null);
+    const startX=e.clientX,oStart=m.start,oIn=m.in,isL=e.target.classList.contains('l');
+    const fdur=musicFileDur();
+    b.setPointerCapture(e.pointerId);
+    let moved=false;
+    const move=ev=>{
+      const dSec=(ev.clientX-startX)/S.pxPerSec;
+      if(!moved&&Math.abs(ev.clientX-startX)<3)return;
+      moved=true;
+      if(isL){
+        let d=snapT(oStart+dSec,null,{noPlayhead:false,noBeats:true})-oStart;
+        d=clamp(d,Math.max(-oIn,-oStart),Math.max(0,(fdur||oIn+1)-0.5-oIn));
+        m.in=oIn+d;m.start=oStart+d;
+      }else m.start=snapT(clamp(oStart+dSec,0,1e6),null,{noBeats:true});
+      b.style.left=(m.start*S.pxPerSec)+'px';
+      b.style.width=Math.max(14,(Math.max(0,fdur-m.in)||4)*S.pxPerSec-2)+'px';
+      drawRuler();markDirty(isL?'trim musik':'flyt musik');invalidate();
+    };
+    const up=()=>{b.removeEventListener('pointermove',move);b.removeEventListener('pointerup',up);if(moved){renderTL();renderInsp();musicChanged()}};
+    b.addEventListener('pointermove',move);b.addEventListener('pointerup',up);
+  });
+  b.ondblclick=e=>{e.stopPropagation();seekTo(m.start)};
+}
 
 /* ---------- Lineal + navigation ---------- */
 function drawRuler(){
@@ -1484,7 +1751,40 @@ function drawRuler(){
     for(let k=1;k<5;k++){const xx=x+k*sub*S.pxPerSec;g.moveTo(xx+0.5,20);g.lineTo(xx+0.5,26)}
   }
   g.stroke();
+  drawWave();drawBeats();
 }
+/* Lærrederne under/over sporene dækker kun det synlige udsnit og følger
+   rulningen som linealen (et lærred i fuld tidslinjebredde kan blive
+   hundredtusinder af pixels). */
+function tlCanvas(cvEl){
+  const w=tlScroll.clientWidth,h=Math.max(1,tlInner.clientHeight-26),dpr=devicePixelRatio||1;
+  const W=Math.round(w*dpr),H=Math.round(h*dpr);
+  if(cvEl.width!==W||cvEl.height!==H){cvEl.width=W;cvEl.height=H}
+  cvEl.style.width=w+'px';cvEl.style.height=h+'px';cvEl.style.left=tlScroll.scrollLeft+'px';
+  const g=cvEl.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  return{g,w,h};
+}
+const MUS_LANE_Y=198-26;   /* musiksporets top i lærredets koordinater (lærredet starter under linealen) */
+/* Bølgeform: højeste top pr. pixelkolonne; fades vises som kurvens form.
+   Den del der ligger efter videoens slutning (høres ikke) tegnes dæmpet. */
+function drawWave(){
+  const{g,w}=tlCanvas($('waveCv'));
+  const m=S.music,it=musicFile();if(!m||!it||!it.peaks)return;
+  const P=it.peaks,px=S.pxPerSec,sl=tlScroll.scrollLeft,end=musicEndT(),span=musicSpanEnd();
+  const mid=MUS_LANE_Y+24,half=19,pmax=it.peakMax||(it.peakMax=P.reduce((a,b)=>b>a?b:a,1e-3));
+  const vol=Math.max(0.01,m.volume);let dim=null;
+  for(let x=0;x<w;x++){
+    const t0=(sl+x)/px,t1=(sl+x+1)/px;
+    if(t1<=m.start||t0>=span)continue;
+    const k0=Math.max(0,Math.floor((t0-m.start+m.in)*PEAK_RATE)),k1=Math.min(P.length,Math.ceil((t1-m.start+m.in)*PEAK_RATE));
+    let pk=0;for(let k=k0;k<k1;k++)if(P[k]>pk)pk=P[k];
+    const after=t0>=end,f=after?1:musicGainAt(m,Math.max(t0,m.start),end)/vol;
+    if(after!==dim){dim=after;g.fillStyle=after?'rgba(255,123,230,.28)':'rgba(255,123,230,.85)'}
+    const hh=Math.max(0.5,pk/pmax*half*f);
+    g.fillRect(x,mid-hh,1,hh*2);
+  }
+}
+function drawBeats(){tlCanvas($('beatCv'))}
 function fmtClock(t){const m=Math.floor(t/60),s=t%60;return m?`${m}:${String(Math.floor(s)).padStart(2,'0')}`:(Number.isInteger(s)?s+'s':s.toFixed(1)+'s')}
 tlScroll.addEventListener('scroll',drawRuler);
 addEventListener('resize',()=>{drawRuler();invalidate()});
@@ -1498,13 +1798,14 @@ ruler.addEventListener('pointerdown',e=>{
   const up=()=>{ruler.removeEventListener('pointermove',mv);ruler.removeEventListener('pointerup',up)};
   ruler.addEventListener('pointermove',mv);ruler.addEventListener('pointerup',up);
 });
-for(const id of['trClips','trTexts','trSubs'])$(id).addEventListener('pointerdown',e=>{
+for(const id of['trClips','trTexts','trSubs','trMusic'])$(id).addEventListener('pointerdown',e=>{
   if(e.target.classList.contains('track')){seekFromEvent(e);deselect()}
 });
 /* Tidslinjens højde: træk i kanten, piletaster på kanten, dobbeltklik =
-   standard. Gulvet er hvad sporene fylder (lineal 26 + 86 + 46 + 46 +
-   værktøjer 34 + kant); loftet 55 % af vinduet. Huskes pr. browser. */
-const TLH_MIN=240,TLH_DEF=270;
+   standard. Gulvet er hvad sporene fylder (lineal 26 + 80 + 46 + 46 + musik
+   48 + værktøjer 34 + kant + vandret rullebjælke 10); loftet 55 % af
+   vinduet. Huskes pr. browser. */
+const TLH_MIN=292,TLH_DEF=300;
 function setTlh(h,save){
   h=Math.round(clamp(h,TLH_MIN,Math.max(TLH_MIN,innerHeight*0.55)));
   document.body.style.setProperty('--tlh',h+'px');
@@ -1590,6 +1891,7 @@ function deleteSelected(){
   if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){S.clips.splice(i,1);deselect();renderTL();markDirty('slet klip');seekTo(clamp(S.t,0,totalDur()));if(!S.clips.length)$('stageHint').style.display='flex'}}
   else if(k==='text'){S.texts=S.texts.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet tekst');invalidate()}
   else if(k==='sub'){S.subs=S.subs.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet undertekst');invalidate()}
+  else if(k==='music')removeMusic();
 }
 function duplicateSelected(){
   const k=S.sel.kind;
@@ -1642,7 +1944,7 @@ function rng(parent,label,obj,key,min,max,step,opt){
   i.type='range';i.min=min;i.max=max;i.step=step;i.value=obj[key];
   const fmt=opt.fmt||(x=>(+x).toFixed(step<0.1?2:step<1?1:0));
   v.textContent=fmt(obj[key]);
-  i.oninput=()=>{obj[key]=+i.value;v.textContent=fmt(obj[key]);markDirty(label);invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
+  i.oninput=()=>{obj[key]=+i.value;v.textContent=fmt(obj[key]);markDirty(label);invalidate();if(opt.tl)renderTL();else if(opt.wave)drawRuler();if(opt.cb)opt.cb()};
   r.append(i,v);parent.appendChild(r);return i;
 }
 function num(parent,label,obj,key,min,max,step,opt){
@@ -1685,6 +1987,7 @@ function renderInsp(){
   if(c){inspClip(B,c)}
   else if(tx){inspText(B,tx)}
   else if(su){inspSub(B,su)}
+  else if(S.sel.kind==='music'&&S.music){inspMusic(B)}
   else if(S.sel.kind==='file'){inspFile(B)}
   else if(S.sel.kind==='files'){inspFiles(B)}
   else{inspProject(B)}
@@ -1830,48 +2133,87 @@ function inspSubShared(B){
   }
   s3.appendChild(list);
 }
+function inspMusic(B){
+  const m=S.music,it=musicFile(),fdur=musicFileDur();
+  $('inspTitle').textContent='Musik';
+  const s1=sec(B,'Musikspor');
+  if(m.missing)s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--err);margin-bottom:8px;line-height:1.5">${ICO('warning','gi--sm')} Filen mangler: <b>${esc(m.missing.name)}</b>. Åbn mappen med filen, så forbindes musikken automatisk. Indtil da er der ingen musik i preview og eksport.</div>`));
+  const end=musicEndT();
+  s1.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);margin-bottom:8px;line-height:1.6">${esc(musicName())} · fil ${fdur?fmtDur(fdur):'—'}<br>${end>m.start?`Lyder fra ${fmtT(m.start)} til ${fmtT(end)}${end<musicSpanEnd()-0.01?' (videoen slutter før sangen)':''}`:'Ligger efter videoens slutning — høres ikke'}</div>`));
+  num(s1,'Start (s)',m,'start',0,36000,0.01,{tl:1,cb:musicChanged});
+  num(s1,'Ind i filen (s)',m,'in',0,Math.max(0,(fdur||1e5)-0.5),0.01,{tl:1,cb:musicChanged});
+  rng(s1,'Lydstyrke',m,'volume',0,1,0.01,{fmt:x=>Math.round(x*100)+'%',cb:musicChanged,wave:1});
+  rng(s1,'Fade ind',m,'fadeIn',0,10,0.1,{fmt:x=>x+'s',cb:musicChanged,wave:1});
+  rng(s1,'Fade ud',m,'fadeOut',0,10,0.1,{fmt:x=>x+'s',cb:musicChanged,wave:1});
+  const br=el('div','btnRow');
+  const bh=el('button','sbtn','Start ved markøren');bh.title='Læg musikkens start ved markøren';
+  bh.onclick=()=>{m.start=S.t;renderTL();renderInsp();markDirty('flyt musik');musicChanged()};
+  const bx=el('button','sbtn danger',ICO('trash')+' Fjern musik');bx.onclick=removeMusic;
+  br.append(bh,bx);s1.appendChild(br);
+}
 function inspFile(B){
   const f=S.files.find(x=>x.id===S.sel.id);
   $('inspTitle').textContent='Medie';
   if(!f)return;
   const s1=sec(B,'Info');
+  const kind={video:'Video',image:'Billede',audio:'Lyd'}[f.type]||'Billede';
   s1.appendChild(el('div',null,`
     ${f.thumb?`<img src="${f.thumb}" alt="" style="width:100%;border-radius:var(--gt-r-3);margin-bottom:8px">`:''}
     <div style="font-size:12px;color:var(--dim);line-height:1.7">
     <b style="color:var(--txt)">${esc(f.name)}</b><br>
-    ${f.type==='video'?'Video':'Billede'} · ${f.w}×${f.h}${f.dur?` · ${fmtDur(f.dur)}`:''}<br>
+    ${kind}${f.type!=='audio'?` · ${f.w}×${f.h}`:''}${f.dur?` · ${fmtDur(f.dur)}`:''}<br>
     ${(f.size/1048576).toFixed(1)} MB ${f.err?`<br><span style="color:var(--err)">${ICO('warning')} ${esc(f.err)}</span>`:''}</div>`));
   const br=el('div','btnRow');br.style.marginTop='10px';
-  const b=el('button','sbtn',ICO('file-plus')+' Læg på tidslinjen');b.onclick=()=>addClipFromFile(f);
-  br.appendChild(b);s1.appendChild(br);
+  if(f.type==='audio'){
+    const isMus=S.music&&S.music.fid===f.id;
+    const b=el('button','sbtn'+(isMus?'':' acc'),ICO('music')+(isMus?' Er projektets musik':S.music?' Brug som musik i stedet':' Brug som musik'));
+    b.onclick=()=>setMusicFromFile(f);br.appendChild(b);
+  }else{
+    const b=el('button','sbtn',ICO('file-plus')+' Læg på tidslinjen');b.onclick=()=>addClipFromFile(f);
+    br.appendChild(b);
+  }
+  s1.appendChild(br);
 }
 function inspFiles(B){
   $('inspTitle').textContent='Medier';
   const sel=binList().filter(f=>S.binSel.has(f.id));
   const s1=sec(B,`${sel.length} medier markeret`);
-  const nv=sel.filter(f=>f.type==='video').length;
-  s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:8px">${nv} videoer · ${sel.length-nv} billeder · ${fmtDur(sel.reduce((a,f)=>a+(f.type==='video'?(f.dur||0):4),0))} i alt.<br>Shift+klik markerer et område, Ctrl+klik slår et medie til eller fra.</div>`));
+  const nv=sel.filter(f=>f.type==='video').length,na=sel.filter(f=>f.type==='audio').length,vis=sel.filter(f=>f.type!=='audio');
+  s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:8px">${nv} videoer · ${sel.length-nv-na} billeder${na?` · ${na} lyd`:''} · ${fmtDur(vis.reduce((a,f)=>a+(f.type==='video'?(f.dur||0):4),0))} i alt.<br>Shift+klik markerer et område, Ctrl+klik slår et medie til eller fra.${na?'<br>Lydfiler bliver musik, ikke klip.':''}</div>`));
   const br=el('div','btnRow');
-  const b=el('button','sbtn acc',ICO('file-plus')+` Læg ${sel.length} markerede på tidslinjen`);b.onclick=()=>addClips(sel);
+  const b=el('button','sbtn acc',ICO('file-plus')+` Læg ${vis.length} markerede på tidslinjen`);b.onclick=()=>addClips(sel);
+  if(!vis.length)b.disabled=!(na&&!S.music);
   const bx=el('button','sbtn','Ryd markering');bx.onclick=()=>{S.binSel.clear();deselect();renderBin()};
   br.append(b,bx);s1.appendChild(br);
 }
 function inspProject(B){
   $('inspTitle').textContent='Projekt';
   /* Et gemt projekt hvis filer ikke er fundet endnu: sig det, og peg på vejen. */
-  const miss=S.clips.filter(c=>c.missing);
-  if(miss.length){
+  const miss=S.clips.filter(c=>c.missing),mMiss=!!(S.music&&S.music.missing);
+  if(miss.length||mMiss){
     const all=miss.length===S.clips.length;
-    const sw=sec(B,all?'Gemt projekt venter på medier':'Klip mangler deres fil');
+    const sw=sec(B,all?'Gemt projekt venter på medier':miss.length?'Klip mangler deres fil':'Musikken mangler sin fil');
     const names=[...new Set(miss.map(c=>c.missing.name))];
-    sw.appendChild(el('div',null,`<div style="font-size:12px;color:var(--gt-warn-ink);line-height:1.6;margin-bottom:8px">${ICO('warning','gi--sm')} ${miss.length} af ${S.clips.length} klip venter på deres fil (${esc(names.slice(0,3).join(', '))}${names.length>3?' …':''}). Åbn mappen med dem, så forbindes de automatisk.</div>`));
+    const txt=[miss.length?`${miss.length} af ${S.clips.length} klip venter på deres fil (${esc(names.slice(0,3).join(', '))}${names.length>3?' …':''}).`:'',
+      mMiss?`Musikken venter på ${esc(S.music.missing.name)}.`:''].filter(Boolean).join(' ');
+    sw.appendChild(el('div',null,`<div style="font-size:12px;color:var(--gt-warn-ink);line-height:1.6;margin-bottom:8px">${ICO('warning','gi--sm')} ${txt} Åbn mappen med dem, så forbindes de automatisk.</div>`));
     const br=el('div','btnRow');
     const bo=el('button','sbtn acc',ICO('folder-open')+' Åbn mappe');bo.onclick=openDirPicker;br.appendChild(bo);
     if($('btnReopenDir').style.display!=='none'){const brd=el('button','sbtn',ICO('refresh')+' Genåbn seneste mappe');brd.onclick=()=>$('btnReopenDir').click();br.appendChild(brd)}
-    const bx=el('button','sbtn danger','Fjern manglende klip');
-    bx.onclick=()=>{if(confirm(`Fjern de ${miss.length} klip der mangler deres fil fra tidslinjen?`)){S.clips=S.clips.filter(c=>!c.missing);renderTL();renderInsp();markDirty('fjern manglende klip');seekTo(clamp(S.t,0,totalDur()))}};
-    br.appendChild(bx);sw.appendChild(br);
+    if(miss.length){
+      const bx=el('button','sbtn danger','Fjern manglende klip');
+      bx.onclick=()=>{if(confirm(`Fjern de ${miss.length} klip der mangler deres fil fra tidslinjen?`)){S.clips=S.clips.filter(c=>!c.missing);renderTL();renderInsp();markDirty('fjern manglende klip');seekTo(clamp(S.t,0,totalDur()))}};
+      br.appendChild(bx);
+    }
+    sw.appendChild(br);
   }
+  /* Musik: vej til inspektøren, eller en forklaring på hvordan man får det. */
+  const sm=sec(B,'Musik');
+  if(S.music){
+    const bm=el('button','sbtn',ICO('music')+' '+esc(musicName()));bm.title='Vis musiksporets indstillinger';
+    bm.onclick=()=>select('music',null);
+    const r=el('div','btnRow');r.appendChild(bm);sm.appendChild(r);
+  }else sm.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);line-height:1.6">Dobbeltklik på en lydfil (mp3, wav, m4a, aac, ogg, opus, flac) i biblioteket for at lægge den som musik.</div>`));
   const s1=sec(B,'Format');
   const resSel=el('select');
   /* "Automatisk" er standard: projektet følger første klip (snappet til
@@ -1914,7 +2256,7 @@ function inspProject(B){
   /* Rullende backup: autosave lægger det gemte projekt her, før det
      overskrives med et projekt med færre klip (og før Indlæs/Gendan). */
   const prev=readPrevAutosave(),pn=k=>prev&&Array.isArray(prev[k])?prev[k].length:0;
-  if(prev&&(pn('clips')||pn('texts')||pn('subs'))){
+  if(prev&&(pn('clips')||pn('texts')||pn('subs')||(prev.music&&typeof prev.music==='object'))){
     const n=Array.isArray(prev.clips)?prev.clips.length:0;
     const when=prev.savedAt?new Date(prev.savedAt).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
     const bp=el('button','sbtn',ICO('undo')+' Gendan forrige autosave');
@@ -1940,14 +2282,34 @@ function serializeProject(){
     clips:S.clips.map(c=>{const it=fileOf(c);return{...c,fid:undefined,missing:undefined,
       fileName:it?it.name:(c.missing?c.missing.name:'?'),fileSize:it?it.size:(c.missing&&c.missing.size||undefined)}}),
     texts:S.texts.map(t=>({...t})),subs:S.subs.map(s=>({...s})),
+    music:S.music?(()=>{const m=S.music,it=musicFile();return{...m,fid:undefined,missing:undefined,
+      fileName:it?it.name:(m.missing?m.missing.name:'?'),fileSize:it?it.size:(m.missing&&m.missing.size||undefined),fileDur:musicFileDur()||undefined}})():null,
     masterVol:S.masterVol,savedAt:Date.now()
   };
 }
-/* Find en indlæst fil til et gemt klip: navn + størrelse når størrelsen er
-   kendt (to kamerakort kan begge have IMG_0001.JPG), ellers kun navn. */
-function matchFile(name,size){
-  const ok=x=>x.name===name&&!x.err&&!x.probing&&(x.type!=='video'||x.dur>0);
+/* Find en indlæst fil til et gemt klip (eller musikken, audio=true): navn +
+   størrelse når størrelsen er kendt (to kamerakort kan begge have
+   IMG_0001.JPG), ellers kun navn. */
+function matchFile(name,size,audio){
+  const ok=x=>x.name===name&&!x.err&&!x.probing&&(x.type==='audio')===!!audio&&(x.type==='image'||x.dur>0);
   return S.files.find(x=>ok(x)&&(!size||x.size===size));
+}
+/* Beat-grid fra en projektfil eller et snapshot (tal tvunges i grænser). */
+function parseGrid(g,num){
+  if(!g||typeof g!=='object')return null;
+  const bpm=num(g.bpm,0,20,400);if(!bpm)return null;
+  return{bpm,anchor:num(g.anchor,0,-1e5,1e5),src:g.src==='kickgrid'?'kickgrid':g.src==='estimat'?'estimat':'manuel',
+    bar:Math.round(num(g.bar,4,1,16)),novelty:Array.isArray(g.novelty)?g.novelty.map(x=>num(x,NaN,0,1e5)).filter(Number.isFinite).slice(0,500):[]};
+}
+function parseMusic(pm,num){
+  if(!pm||typeof pm!=='object')return null;
+  const fname=String(pm.fileName==null?'?':pm.fileName).slice(0,260),fsize=num(pm.fileSize,0,0,1e14);
+  const f=matchFile(fname,fsize,true);
+  const m={fid:f?f.id:null,start:num(pm.start,0,0,36000),in:num(pm.in,0,0,1e5),volume:num(pm.volume,1,0,1),
+    fadeIn:num(pm.fadeIn,0,0,10),fadeOut:num(pm.fadeOut,0,0,10),fileDur:f?f.dur:num(pm.fileDur,0,0,1e5),
+    grid:parseGrid(pm.grid,num),pulse:num(pm.pulse,0,0,0.3)};
+  if(!f)m.missing={name:fname,size:fsize};
+  return m;
 }
 function applyProject(p,opts){
   opts=opts||{};
@@ -1990,17 +2352,21 @@ function applyProject(p,opts){
     if(type==='image')cl.out=cl.imgDur;else if(cl.out<cl.in+0.05)cl.out=cl.in+0.05;
     S.clips.push(cl);
   }
+  if(S.playing)pause();
+  S.music=parseMusic(p.music,num);
+  if(S.music&&S.music.missing)missing.push(S.music.missing.name);
+  ensureMusicBuf();
   applyProjSize();renderTL();invalidate();deselect();
   $('stageHint').style.display=S.clips.length?'none':'flex';
-  if(missing.length&&!opts.quiet)toast(`${missing.length} klip venter på deres fil (${[...new Set(missing)].slice(0,3).join(', ')}${missing.length>3?' …':''}) — åbn mappen med dem`,'err');
+  if(missing.length&&!opts.quiet)toast(`${missing.length} ${missing.length===1?'medie venter på sin fil':'medier venter på deres filer'} (${[...new Set(missing)].slice(0,3).join(', ')}${missing.length>3?' …':''}) — åbn mappen med dem`,'err');
   return missing.length;
 }
-/* Genforbind pladsholdere med filer der er kommet ind siden (Åbn mappe,
-   Filer, træk-og-slip, Opdater mappe). Kaldes efter hver import. */
-function mediaRefs(){return S.clips}  /* Fase B: + S.music */
+/* Genforbind pladsholdere (klip og musik) med filer der er kommet ind siden
+   (Åbn mappe, Filer, træk-og-slip, Opdater mappe, GenStudio). Kaldes efter
+   hver import. */
 function relinkMissing(opts){
-  let n=0;
-  for(const c of mediaRefs()){
+  let n=0,nm=0;
+  for(const c of S.clips){
     if(!c.missing)continue;
     const f=matchFile(c.missing.name,c.missing.size);
     if(!f)continue;
@@ -2009,13 +2375,19 @@ function relinkMissing(opts){
     if(c.type==='image'){if(!(c.imgDur>0))c.imgDur=4;c.out=c.imgDur;if(!c.kb)c.kb=defaultKb()}
     else if(f.dur>0){c.out=Math.min(c.out,f.dur);if(c.in>c.out-0.05)c.in=Math.max(0,c.out-0.05)}
   }
-  if(n&&!(opts&&opts.silent)){
+  const m=S.music;
+  if(m&&m.missing){
+    const f=matchFile(m.missing.name,m.missing.size,true);
+    if(f){m.fid=f.id;delete m.missing;m.fileDur=f.dur;m.in=Math.min(m.in,Math.max(0,f.dur-0.5));nm=1}
+  }
+  if(m&&!m.missing)ensureMusicBuf();
+  if((n||nm)&&!(opts&&opts.silent)){
     S.dirty=true;
     if(typeof HIST!=='undefined'&&!HIST.timer)HIST.cur=snap();
-    renderTL();renderInsp();invalidate();seekTo(clamp(S.t,0,totalDur()));
-    toast(`${n} klip genforbundet med deres filer ✓`,'ok');
+    renderTL();renderInsp();renderBin();invalidate();seekTo(clamp(S.t,0,totalDur()));
+    toast(`${n?`${n} klip`:''}${n&&nm?' og ':''}${nm?'musikken':''} genforbundet med ${n+nm===1?'sin fil':'deres filer'} ✓`,'ok');
   }
-  return n;
+  return n+nm;
 }
 function readPrevAutosave(){
   if(SELFTEST)return null;
@@ -2082,8 +2454,9 @@ function restoreSnap(s){
   S.clips=o.clips;S.texts=o.texts;S.subs=o.subs;
   Object.assign(S.subStyle,o.subStyle);Object.assign(S.proj,o.proj);
   S.projManual=!!o.projManual;S.music=o.music==null?null:o.music;
+  if(S.sel.kind==='music'&&!S.music)S.sel={kind:null,id:null};
   relinkMissing({silent:true});   /* filer importeret siden trinnet blev taget */
-  applyProjSize();renderTL();renderInsp();
+  applyProjSize();renderTL();renderInsp();renderBin();
   $('stageHint').style.display=S.clips.length?'none':'flex';
   seekTo(clamp(S.t,0,totalDur()));
   S.dirty=true;
@@ -2183,6 +2556,12 @@ addEventListener('keydown',e=>{
     e.preventDefault();
     const dir=e.key==='ArrowLeft'?-1:1,c=selClip();
     if(c){moveClip(c,dir);return}
+    if(S.sel.kind==='music'&&S.music){
+      S.music.start=Math.max(0,S.music.start+dir*(e.shiftKey?1:1/S.proj.fps));
+      renderTL();renderInsp();markDirty('flyt musik');musicChanged();invalidate();
+      const b=document.querySelector('.blk.mus');if(b)b.focus();
+      return;
+    }
     const x=selText()||selSub();
     if(x){
       x.start=Math.max(0,x.start+dir*(e.shiftKey?1:1/S.proj.fps));
@@ -2247,9 +2626,8 @@ $('btnStill').onclick=()=>{
 
 $('btnExport').onclick=()=>{
   if(!S.clips.length){toast('Tidslinjen er tom — tilføj klip først','err');return}
-  const nMiss=S.clips.filter(c=>c.missing).length;
-  if(nMiss&&!confirm(`${nMiss} klip mangler deres fil og kommer med som "Mangler"-plader i videoen.
-
+  const nMiss=S.clips.filter(c=>c.missing).length,mMiss=!!(S.music&&S.music.missing);
+  if((nMiss||mMiss)&&!confirm(`${nMiss?`${nMiss} klip mangler deres fil og kommer med som "Mangler"-plader i videoen.\n`:''}${mMiss?`Musikken (${S.music.missing.name}) mangler sin fil, så videoen bliver uden musik.\n`:''}
 Åbn mappen med filerne først for at få dem med. Eksportér alligevel?`))return;
   const f=$('expFmt');f.innerHTML='';
   if(canMp4())f.appendChild(new Option('MP4 · H.264 (anbefalet)','mp4'));
@@ -2372,6 +2750,20 @@ async function buildMasterAudio(total){
     }else g.gain.value=base;
     src.connect(g).connect(oc.destination);
     src.start(start,clamp(c.in,0,buf.duration),Math.max(0.01,c.out-c.in));
+  }
+  /* Musiksporet: samme start, ind-punkt, lydstyrke og fades som i preview
+     (musicGainAt/applyMusicGain), skåret af ved videoens slutning. */
+  const m=S.music;
+  if(m&&musicFile()){
+    const mbuf=await ensureMusicBuf();
+    const end=Math.min(musicEndT(),total);
+    if(mbuf&&end>m.start+0.005){
+      any=true;
+      const src=oc.createBufferSource();src.buffer=mbuf;
+      const g=oc.createGain();applyMusicGain(g.gain,m,m.start,end,m.start);
+      src.connect(g).connect(oc.destination);
+      src.start(m.start,m.in,end-m.start);
+    }else if(!mbuf)toast('Musikken kunne ikke afkodes — videoen eksporteres uden musik','err');
   }
   if(readFail.size)toast(`Lyden fra ${[...readFail].slice(0,3).join(', ')} kunne ikke læses — de klip eksporteres uden lyd`,'err');
   if(!any)return null;
@@ -2763,9 +3155,9 @@ function netBadgeUpdate(){
   if(!SELFTEST){
     let saved=null;try{saved=JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){}
     const has=k=>saved&&Array.isArray(saved[k])&&saved[k].length;
-    if(saved&&typeof saved==='object'&&(has('clips')||has('texts')||has('subs'))){
+    if(saved&&typeof saved==='object'&&(has('clips')||has('texts')||has('subs')||(saved.music&&typeof saved.music==='object'))){
       const nm=applyProject(saved,{quiet:true});
-      toast(nm?`Projektet fra sidste session er gendannet — ${nm} klip venter på deres filer. Åbn mappen med dem.`:'Projekt gendannet fra sidste session ✓',nm?'':'ok',{ms:nm?7000:3000});
+      toast(nm?`Projektet fra sidste session er gendannet — ${nm} ${nm===1?'medie venter på sin fil':'medier venter på deres filer'}. Åbn mappen med dem.`:'Projekt gendannet fra sidste session ✓',nm?'':'ok',{ms:nm?7000:3000});
     }
   }
   netBadgeUpdate();
