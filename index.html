@@ -794,10 +794,14 @@ function addClipFromFile(it,atIndex){
   if(atIndex==null)atIndex=S.clips.length;
   S.clips.splice(atIndex,0,c);
   if(S.clips.length===1&&!S.projManual)adoptProjectSize(it);
-  else if(S.clips.length===1&&it.w&&it.h&&orientOf(it.w,it.h)!==orientOf(S.proj.w,S.proj.h)){
+  /* Vender klippet anderledes end projektet (fx et liggende AI-klip i et
+     9:16-projekt), er "Tilpas + sløret baggrund" standard i stedet for et
+     hårdt beskåret udsnit. */
+  if(it.w&&it.h&&orientOf(it.w,it.h)!==orientOf(S.proj.w,S.proj.h))c.fit='blur';
+  if(S.clips.length===1&&S.projManual&&it.w&&it.h&&orientOf(it.w,it.h)!==orientOf(S.proj.w,S.proj.h)){
     /* Manuelt valgt format, men første klip vender anderledes: spørg. */
     toast(`Klippet er ${ORIENT_TXT[orientOf(it.w,it.h)]}, projektet er ${ORIENT_TXT[orientOf(S.proj.w,S.proj.h)]} (${S.proj.w}×${S.proj.h}).`,'',
-      {action:{label:'Skift til klippets format',fn:()=>{S.projManual=false;adoptProjectSize(it);markDirty('format');renderInsp()}}});
+      {action:{label:'Skift til klippets format',fn:()=>{S.projManual=false;adoptProjectSize(it);if(c.fit==='blur')c.fit='cover';markDirty('format');renderInsp();invalidate()}}});
   }
   select('clip',c.id);
   renderTL();markDirty('tilføj klip');
@@ -895,6 +899,29 @@ function drawMissing(c2,c,W,H,sFac){
   c2.fillText(fitLine(c2,c.missing.name,W*0.88),W/2,H/2+30*sFac);
   c2.restore();
 }
+/* "Tilpas + sløret baggrund": klippet tegnes helt (contain) oven på en
+   sløret, mørklagt kopi af sig selv i fyld-skala. Sløringen er billig: kilden
+   skaleres ned i to trin (96 → 48 px på den korte led) og strækkes op igen
+   med udglatning — ingen ctx.filter-blur pr. billede, så realtidseksporten
+   ikke taber billeder. Lærrederne deles af preview og eksport (sekventielt). */
+const blurA=document.createElement('canvas'),blurB=document.createElement('canvas');
+const blurAx=blurA.getContext('2d'),blurBx=blurB.getContext('2d');
+function drawBlurBg(c2,src,sw,sh,W,H,alpha,filter){
+  const s1=96/Math.min(sw,sh);
+  const w1=Math.max(2,Math.round(sw*s1)),h1=Math.max(2,Math.round(sh*s1));
+  if(blurA.width!==w1||blurA.height!==h1){blurA.width=w1;blurA.height=h1}
+  blurAx.imageSmoothingQuality='high';blurAx.drawImage(src,0,0,w1,h1);
+  const w2=Math.max(2,w1>>1),h2=Math.max(2,h1>>1);
+  if(blurB.width!==w2||blurB.height!==h2){blurB.width=w2;blurB.height=h2}
+  blurBx.imageSmoothingQuality='high';blurBx.drawImage(blurA,0,0,w2,h2);
+  const sc=Math.max(W/w2,H/h2)*1.06;   /* lidt ekstra, så de bløde kanter ligger udenfor */
+  c2.save();
+  c2.globalAlpha=alpha;c2.imageSmoothingEnabled=true;c2.imageSmoothingQuality='high';
+  if(filter&&filter!=='none')c2.filter=filter;
+  c2.drawImage(blurB,(W-w2*sc)/2,(H-h2*sc)/2,w2*sc,h2*sc);
+  c2.filter='none';c2.fillStyle='rgba(0,0,0,.35)';c2.fillRect(0,0,W,H);
+  c2.restore();
+}
 function drawFrame(t,c2,opts){
   opts=opts||{};
   const W=c2.canvas.width,H=c2.canvas.height;
@@ -915,7 +942,10 @@ function drawFrame(t,c2,opts){
     }else if(it&&it.imgEl){src=it.imgEl;sw=it.w;sh=it.h}
     if(src&&sw&&sh){
       const d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
-      let scale=(c.fit==='contain')?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
+      const fitIn=c.fit==='contain'||c.fit==='blur';
+      let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
+      /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
+      if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fadeGain(c,ca.local),hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
       let ox=0,oy=0;
       if(c.type==='image'&&c.kb){
         const k=c.kb,z=lerp(k.zs,k.ze,p);scale*=z;
@@ -1494,7 +1524,7 @@ function inspClip(B,c){
   }
   rng(s1,'Fade ind',c,'fadeIn',0,5,0.1,{fmt:x=>x+'s'});
   rng(s1,'Fade ud',c,'fadeOut',0,5,0.1,{fmt:x=>x+'s'});
-  selBox(s1,'Tilpasning',c,'fit',['cover|Fyld (beskær)','contain|Tilpas (bånd)']);
+  selBox(s1,'Tilpasning',c,'fit',['cover|Fyld (beskær)','contain|Tilpas (bånd)','blur|Tilpas + sløret baggrund']);
   if(c.type==='image'&&c.kb){
     const s3=sec(B,'Ken Burns (zoom/pan)');
     rng(s3,'Zoom start',c.kb,'zs',1,2.2,0.01,{fmt:x=>x+'×'});
@@ -1740,7 +1770,7 @@ function applyProject(p,opts){
       id:uid(),fid:f?f.id:null,type,
       in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f&&f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
-      fit:c.fit==='contain'?'contain':'cover',
+      fit:c.fit==='contain'||c.fit==='blur'?c.fit:'cover',
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
       kb:kb&&typeof kb==='object'?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),
         pxs:num(kb.pxs,num(kb.px,0,-1,1),-1,1),pxe:num(kb.pxe,-num(kb.px,0,-1,1),-1,1),
