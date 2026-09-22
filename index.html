@@ -3634,6 +3634,22 @@ async function makeSelftestToneMp4(){
   mux.finalize();
   return new File([target.buffer],'selftest_tone.mp4',{type:'video/mp4',lastModified:Date.now()});
 }
+/* Et syntetisk kick-spor (WAV, mono 48 kHz): kicks hvert 60/bpm s fra
+   first, så selvtesten kan køre musiksporet og beat-estimatet. */
+function makeSelftestKickWav(bpm,dur,first){
+  const sr=48000,n=Math.round(sr*dur),T=60/bpm,pcm=new Int16Array(n);
+  for(let i=0;i<n;i++){
+    const t=i/sr;if(t<first)continue;
+    const tau=(t-first)%T;
+    const v=0.8*Math.sin(2*Math.PI*(50*tau+3*(1-Math.exp(-30*tau))))*Math.exp(-8*tau);
+    pcm[i]=Math.round(clamp(v,-1,1)*32767);
+  }
+  const buf=new ArrayBuffer(44+n*2),dv=new DataView(buf),w=(o,s)=>{for(let k=0;k<s.length;k++)dv.setUint8(o+k,s.charCodeAt(k))};
+  w(0,'RIFF');dv.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,1,true);
+  dv.setUint32(24,sr,true);dv.setUint32(28,sr*2,true);dv.setUint16(32,2,true);dv.setUint16(34,16,true);w(36,'data');dv.setUint32(40,n*2,true);
+  new Int16Array(buf,44).set(pcm);
+  return new File([buf],'selftest_kick.wav',{type:'audio/wav',lastModified:Date.now()});
+}
 /* Varighed fra en blobs metadata (samme vej som probeVideo). */
 function blobDuration(blob){
   return new Promise((res,rej)=>{
@@ -3660,6 +3676,7 @@ async function selftest(){
     const files=[await mk('#2266ff','A'),await mk('#ff6622','B')];
     let tone=null;
     if(canMp4()&&window.AudioEncoder){tone=await makeSelftestToneMp4();files.push(tone);log('testklip med tone',tone.size,'B')}
+    files.push(makeSelftestKickWav(120,8,0.25));
     await addMediaFiles(files);
     const fA=S.files.find(f=>f.name==='selftest_A.png'),fB=S.files.find(f=>f.name==='selftest_B.png');
     const fT=tone&&S.files.find(f=>f.name==='selftest_tone.mp4');
@@ -3668,6 +3685,18 @@ async function selftest(){
     addClipFromFile(fA);if(fT)addClipFromFile(fT);addClipFromFile(fB);
     for(const c of S.clips)if(c.type==='image'){c.imgDur=1;c.out=1}
     S.clips[0].fx.sat=1.6;S.clips[0].fadeIn=0.3;
+    /* Musik: 120 BPM-kicks fra 0,25 s i filen, lagt så de lyder under
+       billede B (3-4 s): første kick ved 3,25 s på tidslinjen. Beat-gridet
+       estimeres og skal ramme 120 BPM; B får et hvidt blink og puls. */
+    const fK=S.files.find(f=>f.name==='selftest_kick.wav');
+    if(!fK||fK.err||fK.type!=='audio'||!(Math.abs(fK.dur-8)<0.01))throw new Error('lydfilen blev ikke indlæst som lyd'+(fK&&fK.err?': '+fK.err:''));
+    setMusicFromFile(fK);
+    const kbuf=await ensureMusicBuf();if(!kbuf)throw new Error('musikken kunne ikke afkodes');
+    const grid=await estimateGrid(kbuf);
+    if(!grid||!(Math.abs(grid.bpm-120)<0.5))throw new Error('beat-estimatet gav '+(grid?grid.bpm.toFixed(2):'intet')+' BPM, ikke 120');
+    log('beat-grid',grid.bpm.toFixed(3),'BPM, første slag',grid.anchor.toFixed(4),'s');
+    S.music.grid=grid;S.music.start=3;S.music.pulse=0.04;
+    S.clips[S.clips.length-1].cutFx='flash';
     addTextAtPlayhead();S.texts[0].text='SELVTEST';S.texts[0].start=0;S.texts[0].dur=2;
     addSubAtPlayhead();S.subs[0].text='Undertekst-test';S.subs[0].start=0;S.subs[0].dur=2;
     renderTL();seekTo(0.5);
@@ -3692,12 +3721,17 @@ async function selftest(){
         const ab=await new OfflineAudioContext(1,1,48000).decodeAudioData(await blob.arrayBuffer());
         const ch=ab.getChannelData(0),sr=ab.sampleRate;
         const rms=(a,b)=>{let q=0,n=0;for(let i=Math.floor(a*sr);i<Math.min(ch.length,Math.floor(b*sr));i++){q+=ch[i]*ch[i];n++}return Math.sqrt(q/Math.max(1,n))};
-        const inTone=rms(1.2,2.8),inImg=rms(0.1,0.9);
-        log('lyd rms: klip='+inTone.toFixed(4)+' billede='+inImg.toFixed(4)+' lydlængde='+ab.duration.toFixed(3));
+        const inTone=rms(1.2,2.8),inImg=rms(0.1,0.9),inMus=rms(3.2,3.95);
+        log('lyd rms: klip='+inTone.toFixed(4)+' billede='+inImg.toFixed(4)+' musik='+inMus.toFixed(4)+' lydlængde='+ab.duration.toFixed(3));
         if(!(inTone>0.05))throw new Error('eksportens lyd er stille i videoklippet (RMS '+inTone.toFixed(4)+')');
         if(!(inImg<0.01))throw new Error('der er lyd under billedklippene (RMS '+inImg.toFixed(4)+')');
+        if(!(inMus>0.02))throw new Error('musikken høres ikke i eksporten (RMS '+inMus.toFixed(4)+')');
+        /* Første kick: forventet ved 3,25 s (musikkens start 3 + 0,25 i filen). */
+        let kick=-1;for(let i=Math.floor(3.05*sr);i<ch.length;i++)if(Math.abs(ch[i])>0.3){kick=i/sr;break}
+        log('første kick i eksporten ved',kick.toFixed(4),'s');
+        if(!(Math.abs(kick-3.25)<1/fps))throw new Error('musikkens kick ligger ved '+kick.toFixed(3)+' s, ikke 3,25 s');
         if(!(Math.abs(ab.duration-total)<1/fps))throw new Error(`lydsporets længde ${ab.duration.toFixed(3)} s ≠ ${total.toFixed(3)} s`);
-        lydTxt=` · lyd RMS ${inTone.toFixed(2)}`;
+        lydTxt=` · lyd RMS ${inTone.toFixed(2)} · musik ${grid.bpm.toFixed(2)} BPM, kick ${kick.toFixed(3)} s`;
       }
       mp4txt=`mp4 ${dur.toFixed(3)} s = tidslinje ${total.toFixed(3)} s${lydTxt} (${blob.size/1024|0} KB)`;
     }
