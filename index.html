@@ -555,6 +555,7 @@ textarea:focus-visible,
 <div id="status">
   <span id="stProj"><b>1080×1920</b> · 30 fps</span>
   <span id="stSel"></span>
+  <span id="stSnap"></span>
   <span class="grow"></span>
   <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> del · <kbd>T</kbd>/<kbd>U</kbd> tekst · <kbd>←→</kbd> billede · <kbd>Alt+←→</kbd> flyt · <kbd>Ctrl+Z</kbd> fortryd · <kbd>F</kbd> fokus · <kbd>Del</kbd> slet</span>
 </div>
@@ -595,6 +596,7 @@ textarea:focus-visible,
 <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*,.mp4,.mov,.m4v,.webm,.mkv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac" style="display:none">
 <input type="file" id="dirInput" webkitdirectory style="display:none">
 <input type="file" id="projInput" accept=".json" style="display:none">
+<input type="file" id="gridInput" accept=".json,application/json" style="display:none">
 
 <script src="./mp4-muxer.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';s.onload=function(){if(typeof netBadgeUpdate==='function')netBadgeUpdate()};document.head.appendChild(s)})()"></script>
 <script>
@@ -1385,6 +1387,151 @@ function removeMusic(){
   if(S.sel.kind==='music')deselect();
   renderTL();renderBin();markDirty('fjern musik');invalidate();
 }
+/* ================================================================
+   BEAT-GRID — S.music.grid = {bpm, anchor, src, bar, novelty}
+   anchor er et slag (helst en takt-start) i FILENS tid, så gridet følger
+   med når musikken flyttes eller trimmes. Slag k ligger på tidslinjen ved
+   t = start + anchor + k·60/bpm − in.
+   ================================================================ */
+const gridOf=()=>S.music&&S.music.grid&&S.music.grid.bpm>0?S.music.grid:null;
+function beatT(k){const m=S.music,g=m.grid;return m.start+g.anchor+k*60/g.bpm-m.in}
+function beatIdx(t){const m=S.music,g=m.grid;return(t-m.start+m.in-g.anchor)*g.bpm/60}
+const fmtBpm=b=>(Math.round(b*100)/100).toLocaleString('da-DK',{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Estimat i browseren: lowpass 150 Hz (kicks), RMS pr. 11,6 ms, positiv
+   differens som onset-kurve. Grov BPM ved autokorrelation over 70-180 BPM
+   (let vægtet mod 120, så støj ikke vælger dobbelt/halvt tempo), så BPM og
+   fase ved at maksimere den summerede onset på gitteret, og til sidst en
+   lineær regression gennem hvert slags onset-tyngdepunkt (under-frame-
+   præcision over hele sangen). Dobbelt/halvt tempo rettes med ×2/÷2. */
+async function estimateGrid(buf){
+  const SR=11025,H=128,hs=H/SR;
+  const oc=new OfflineAudioContext(1,Math.max(H*8,Math.ceil(buf.duration*SR)),SR);
+  const src=oc.createBufferSource();src.buffer=buf;
+  const lp=oc.createBiquadFilter();lp.type='lowpass';lp.frequency.value=150;lp.Q.value=Math.SQRT1_2;
+  src.connect(lp).connect(oc.destination);src.start(0);
+  const x=(await oc.startRendering()).getChannelData(0);
+  const N=Math.floor(x.length/H),o=new Float32Array(N);
+  let prev=0;
+  for(let i=0;i<N;i++){let q=0;for(let j=i*H,e=j+H;j<e;j++)q+=x[j]*x[j];const r=Math.sqrt(q/H);o[i]=r>prev?r-prev:0;prev=r}
+  /* 1) grov BPM */
+  const Lmin=Math.floor(60/(180*hs)),Lmax=Math.ceil(60/(70*hs));
+  if(N<Lmax*4)return null;
+  let mean=0;for(let i=0;i<N;i++)mean+=o[i];mean/=N;
+  const acf=new Float64Array(Lmax+2);
+  for(let L=Lmin-1;L<=Lmax+1;L++){let s=0;for(let i=0;i+L<N;i++)s+=(o[i]-mean)*(o[i+L]-mean);acf[L]=s/(N-L)}
+  let best=-Infinity,bL=0;
+  for(let L=Lmin;L<=Lmax;L++){
+    if(!(acf[L]>=acf[L-1]&&acf[L]>=acf[L+1]))continue;
+    const bpm=60/(L*hs),v=acf[L]*Math.exp(-0.5*Math.pow(Math.log2(bpm/120),2));
+    if(v>best){best=v;bL=L}
+  }
+  if(!bL||!(acf[bL]>0))return null;
+  const y0=acf[bL-1],y1=acf[bL],y2=acf[bL+1],den=y0-2*y1+y2;
+  const bpm0=60/((bL+(den<0?0.5*(y0-y2)/den:0))*hs);
+  /* 2) BPM ±1,5 og fase: størst summeret onset på gitteret */
+  const at=t=>{const f=t/hs,i=Math.floor(f);if(i<0||i>=N-1)return 0;const a=f-i;return o[i]*(1-a)+o[i+1]*a};
+  let bestS=-1,bBpm=bpm0,bPh=0;
+  for(let bpm=bpm0-1.5;bpm<=bpm0+1.5;bpm+=0.02){
+    const T=60/bpm,K=Math.floor(buf.duration/T);
+    for(let ph=0;ph<T;ph+=hs/3){let s=0;for(let k=0;k<K;k++)s+=at(ph+k*T);if(s>bestS){bestS=s;bBpm=bpm;bPh=ph}}
+  }
+  /* 3) regression gennem slagenes onset-tyngdepunkter (to gennemløb, det
+     andet uden slag der afviger mere end 3× medianafvigelsen) */
+  let T=60/bBpm,a=bPh,first=null;
+  const median=v=>{const s=[...v].sort((p,q)=>p-q);return s.length?s[s.length>>1]:0};
+  for(let pass=0;pass<2;pass++){
+    const pts=[];
+    for(let k=0;a+k*T<buf.duration;k++){
+      const c=a+k*T,i0=Math.max(1,Math.floor((c-T/4)/hs)),i1=Math.min(N-1,Math.ceil((c+T/4)/hs));
+      let m=0,mt=0;for(let i=i0;i<=i1;i++){m+=o[i];mt+=o[i]*i*hs}
+      if(m>0)pts.push({k,t:mt/m,m});
+    }
+    const med=median(pts.map(p=>p.m));
+    let P=pts.filter(p=>p.m>=med*0.3);
+    if(pass===1&&P.length>8){const res=P.map(p=>Math.abs(p.t-(a+p.k*T))),mad=median(res)||hs;P=P.filter((p,i)=>res[i]<=3*mad+hs/2)}
+    if(P.length<4)break;
+    let sk=0,st=0,skk=0,skt=0;for(const p of P){sk+=p.k;st+=p.t;skk+=p.k*p.k;skt+=p.k*p.t}
+    const n=P.length,d=n*skk-sk*sk;if(!(d>0))break;
+    const b=(n*skt-sk*st)/d;if(!(b>0))break;
+    const a0=(st-b*sk)/n;
+    const k0=P[0].k;T=b;a=a0;first=a0+k0*T;
+  }
+  let anchor=first!=null?first:a;
+  while(anchor<0)anchor+=T;
+  return{bpm:60/T,anchor,src:'estimat',bar:4,novelty:[]};
+}
+/* kickgrid.json fra beat-sync-skillen (analyze_song.py): bpm (eller den
+   ældre bpm_nominal / beat_s), anker fra første kick_region, novelty-grænser
+   som {t,strength} eller tal. Manglende felter tåles. */
+function gridFromKickgrid(j){
+  if(!j||typeof j!=='object')throw new Error('ikke et JSON-objekt');
+  let bpm=+j.bpm||+j.bpm_nominal||(+j.beat_s>0?60/+j.beat_s:0);
+  if(!(bpm>=20&&bpm<=400))throw new Error('ingen brugbar bpm');
+  const r=Array.isArray(j.kick_regions)?j.kick_regions.find(x=>x&&Number.isFinite(+x.grid_anchor_s)):null;
+  const hasAnchor=!!r||Number.isFinite(+j.grid_anchor_s);
+  const anchor=r?+r.grid_anchor_s:(hasAnchor?+j.grid_anchor_s:0);
+  const novelty=(Array.isArray(j.novelty_boundaries_s)?j.novelty_boundaries_s:[]).map(x=>typeof x==='number'?x:x&&+x.t).filter(v=>Number.isFinite(v)&&v>=0).slice(0,500);
+  return{grid:{bpm,anchor:Math.max(0,anchor),src:'kickgrid',bar:4,novelty},hasAnchor,file:typeof j.file==='string'?j.file:''};
+}
+async function estimateMusicGrid(){
+  const m=S.music;if(!m||m.missing){toast('Musikken mangler sin fil','err');return}
+  const t=toast('Finder slag i musikken…','',{ms:30000});
+  try{
+    const buf=await ensureMusicBuf();if(!buf)throw new Error('musikken kan ikke afkodes');
+    const g=await estimateGrid(buf);
+    t.remove();
+    if(!g){toast('Kunne ikke finde et tydeligt slag — importér et kickgrid.json eller skriv BPM selv','err');return}
+    if(S.music!==m)return;
+    m.grid=g;
+    renderTL();renderInsp();markDirty('beat-grid (estimat)');invalidate();
+    toast(`Beat-grid: ${fmtBpm(g.bpm)} BPM (estimat). Hører det dobbelt eller halvt tempo, så brug ×2 / ÷2.`,'ok',{ms:6000});
+  }catch(e){t.remove();console.warn('Beat-estimat fejlede',e);toast('Beat-estimat fejlede: '+(e&&e.message||e),'err')}
+}
+$('gridInput').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f||!S.music)return;
+  try{
+    const r=gridFromKickgrid(JSON.parse(await f.text()));
+    S.music.grid=r.grid;
+    renderTL();renderInsp();markDirty('importér beat-grid');invalidate();
+    const nm=musicName();
+    toast(`Beat-grid importeret: ${fmtBpm(r.grid.bpm)} BPM${r.grid.novelty.length?` · ${r.grid.novelty.length} afsnitsgrænser`:''}`+
+      (!r.hasAnchor?' — filen har intet anker: første slag er sat til 0 s, skub det på plads':'')+
+      (r.file&&nm&&r.file!==nm?` — OBS: målt på ${r.file}, musikken er ${nm}`:''),r.hasAnchor&&!(r.file&&nm&&r.file!==nm)?'ok':'err',{ms:7000});
+  }catch(err){toast('Kan ikke læse beat-grid: '+(err&&err.message||err),'err')}
+};
+/* Klip på beat: hvert klip får n slag, så hvert klipskift ligger på et slag
+   (skift på slag k ≡ 0 mod n, talt fra ankeret, så 4/8 slag skærer på
+   takt-starter). Første klip (og klippet efter et for kort klip) får mellem
+   ½ og 1½ gang n slag, så skiftet lander på gitteret igen. En video der er for kort
+   får det største antal hele slag den kan bære (markeret "kort"); kan den
+   ikke bære ½ slag, røres den ikke (markeret). Billeder forlænges frit. */
+const BEAT_MARK=new Map();   /* klip-id → 'kort' | 'urørt' (vises på tidslinjen, gemmes ikke) */
+function cutOnBeats(n){
+  const g=gridOf();if(!g){toast('Der er intet beat-grid endnu','err');return}
+  if(!S.clips.length){toast('Tidslinjen er tom','err');return}
+  const T=60/g.bpm,step=n*T;
+  const cutAfter=t=>beatT(Math.ceil(beatIdx(t)/n-1e-9)*n);
+  const beatAtOrBefore=t=>beatT(Math.floor(beatIdx(t)+1e-9));
+  BEAT_MARK.clear();
+  let t=0,nShort=0,nKept=0;
+  for(const c of S.clips){
+    const it=fileOf(c);
+    const avail=c.type==='video'?(it&&it.dur>0?(it.dur-c.in)/c.speed:(c.out-c.in)/c.speed):Infinity;
+    let e=cutAfter(t+step*0.5+1e-6);   /* uafgjort (efter et kort klip): det længste */
+    if(e-t>avail+1e-6){
+      const e2=beatAtOrBefore(t+avail);
+      if(e2-t>=T*0.5-1e-6){e=e2;nShort++;BEAT_MARK.set(c.id,'kort')}
+      else{nKept++;BEAT_MARK.set(c.id,'urørt');t+=clipDur(c);continue}
+    }
+    const d=e-t;
+    if(c.type==='video')c.out=Math.min(c.in+d*c.speed,it&&it.dur>0?it.dur:c.in+d*c.speed);
+    else{c.imgDur=d;c.out=d}
+    t+=clipDur(c);
+  }
+  renderTL();renderInsp();markDirty('klip på beat');seekTo(clamp(S.t,0,totalDur()));
+  const lbl=`${n} slag${n===(g.bar||4)?' (1 takt)':''}`;
+  toast(`${S.clips.length} klip sat til ${lbl}${nShort?` · ${nShort} kortere (videoen er for kort)`:''}${nKept?` · ${nKept} urørt (under ½ slag)`:''}`,nShort||nKept?'':'ok',{ms:nShort||nKept?7000:3000});
+}
 /* Lydens udgangstid (det der høres nu) frem for render-tiden. */
 function acNow(ac){
   if(ac.getOutputTimestamp){const o=ac.getOutputTimestamp();if(o&&o.contextTime>0&&o.performanceTime>0)return o.contextTime+(performance.now()-o.performanceTime)/1000}
@@ -1520,12 +1667,26 @@ const selClip=()=>S.sel.kind==='clip'?S.clips.find(c=>c.id===S.sel.id):null;
 const selText=()=>S.sel.kind==='text'?S.texts.find(c=>c.id===S.sel.id):null;
 const selSub =()=>S.sel.kind==='sub' ?S.subs.find(c=>c.id===S.sel.id):null;
 
+/* Alt eller Shift holdt nede under et træk: ingen snap (vises i statuslinjen). */
+let SNAP_MOD=false;
+function updSnapStatus(){
+  const g=gridOf(),on=$('snapChk').checked,drag=typeof ptrDown!=='undefined'&&ptrDown;
+  $('stSnap').textContent=on&&SNAP_MOD&&drag?'Snap fra (Alt/Shift holdt nede)':on&&g?`Snap til slag · ${fmtBpm(g.bpm)} BPM · Alt/Shift: uden snap`:'';
+}
+function setSnapMod(v){if(v!==SNAP_MOD){SNAP_MOD=v;updSnapStatus()}}
+addEventListener('pointerdown',e=>{SNAP_MOD=e.altKey||e.shiftKey;setTimeout(updSnapStatus,0)},true);
+addEventListener('pointermove',e=>setSnapMod(e.altKey||e.shiftKey),true);
+addEventListener('pointerup',()=>setTimeout(updSnapStatus,0),true);
+addEventListener('keydown',e=>{if(e.key==='Alt'||e.key==='Shift')setSnapMod(true)},true);
+addEventListener('keyup',e=>{if(e.key==='Alt'||e.key==='Shift')setSnapMod(e.altKey||e.shiftKey)},true);
+addEventListener('blur',()=>setSnapMod(false));
+$('snapChk').addEventListener('change',updSnapStatus);
 /* opts.noPlayhead: markøren er ikke et mål (den følger selv kanten under trim)
    opts.clipsUntil: kun klipgrænser til og med dette klips start (resten flytter sig)
    opts.noBeats: ingen beat-mål (når selve musikken trækkes) */
 function snapT(t,ignoreId,opts){
   opts=opts||{};
-  if(!$('snapChk').checked)return Math.max(0,t);
+  if(!$('snapChk').checked||SNAP_MOD)return Math.max(0,t);
   const tol=8/S.pxPerSec,cand=[0];
   if(!opts.noPlayhead)cand.push(S.t);
   let acc=0;
@@ -1533,7 +1694,15 @@ function snapT(t,ignoreId,opts){
   if(opts.clipsUntil==null)cand.push(acc);
   for(const x of S.texts)if(x.id!==ignoreId)cand.push(x.start,x.start+x.dur);
   for(const x of S.subs)if(x.id!==ignoreId)cand.push(x.start,x.start+x.dur);
-  cand.push(Math.round(t));
+  /* Beat-grid: nærmeste slag og afsnitsgrænser (kun hvor musikken ligger);
+     der erstatter de hele sekunder som mål. */
+  const g=opts.noBeats?null:gridOf(),m=S.music;
+  const inMusic=g&&t>=m.start-tol&&t<=musicSpanEnd()+tol;
+  if(inMusic){
+    const b=beatT(Math.round(beatIdx(t)));
+    if(b>=m.start-1e-6&&b<=musicSpanEnd()+1e-6)cand.push(b);
+    for(const f of g.novelty||[])cand.push(m.start+f-m.in);
+  }else cand.push(Math.round(t));
   let best=t,bd=tol;
   for(const c of cand){const d=Math.abs(c-t);if(d<bd){bd=d;best=c}}
   return Math.max(0,best);
@@ -1563,6 +1732,8 @@ function renderTL(){
     if(hasFx(c.fx))tags.push('FX');
     if(c.speed!==1)tags.push(c.speed+'×');
     if(c.type==='image')tags.push('<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-image"></use></svg>');
+    const bm=BEAT_MARK.get(c.id);
+    if(bm)tags.push(`<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg>${bm==='kort'?'kort':'urørt'}`);
     b.innerHTML=`${tags.length?`<div class="fxdot">${tags.join(' ')}</div>`:''}
       <div class="dtag">${fmtDur(d)}</div>
       <div class="lbl">${c.missing?'Mangler: ':''}${esc(clipName(c))}</div>
@@ -1574,7 +1745,7 @@ function renderTL(){
   renderOverlayTrack($('trTexts'),S.texts,'txt','text');
   renderOverlayTrack($('trSubs'),S.subs,'sub','sub');
   renderMusicTrack();
-  drawRuler();updateTimeUI();
+  drawRuler();updateTimeUI();updSnapStatus();
 }
 /* Musiksporet: én blok fra start med filens resterende længde. Bølgeformen
    tegnes af drawWave() på lærredet under sporet (se drawRuler). */
@@ -1638,6 +1809,18 @@ function attachClipEvents(b,c,idx){
         }else{
           c.imgDur=clamp(oDur+(isL?-dSec:dSec),0.2,600);c.out=c.imgDur;
         }
+        /* Snap: klipskiftet efter klippet (sporet er magnetisk, så begge
+           håndtag flytter netop det) lægges på et slag/en grænse. Kun
+           grænser før klippet og faste mål — ikke markøren, der selv følger kanten. */
+        const i=S.clips.indexOf(c),st=clipStart(i),E=st+clipDur(c),E2=snapT(E,null,{noPlayhead:true,clipsUntil:i});
+        if(Math.abs(E2-E)>1e-9&&E2>st){
+          const want=E2-st;
+          if(c.type==='video'){
+            if(isL)c.in=clamp(c.out-want*c.speed,0,c.out-0.08);
+            else c.out=clamp(c.in+want*c.speed,c.in+0.08,it?it.dur:c.out);
+          }else{c.imgDur=clamp(want,0.2,600);c.out=c.imgDur}
+        }
+        BEAT_MARK.delete(c.id);
         b.style.width=Math.max(14,clipDur(c)*S.pxPerSec-2)+'px';
         if(dtag)dtag.textContent=fmtDur(clipDur(c));
         markDirty('trim klip');invalidate();
@@ -1751,7 +1934,43 @@ function drawRuler(){
     for(let k=1;k<5;k++){const xx=x+k*sub*S.pxPerSec;g.moveTo(xx+0.5,20);g.lineTo(xx+0.5,26)}
   }
   g.stroke();
+  /* Beat-grid: korte streger på slag, lange på takt-starter med taktnummer
+     (talt fra sangens begyndelse). Kun hvor musikken ligger. */
+  const bs=visibleBeats(t0,t1);
+  if(bs){
+    const mag=tok('--gt-magenta-ink')||'#FF7BE6';
+    g.strokeStyle=mag;g.fillStyle=mag;g.textBaseline='bottom';g.font=`600 ${fpx}px ${tok('--gt-font-ui')}`;
+    g.beginPath();
+    let lastLbl=-1e9;
+    for(const b of bs){
+      const x=Math.round(b.t*S.pxPerSec-tlScroll.scrollLeft)+0.5;
+      if(b.bar){g.moveTo(x,11);g.lineTo(x,26);if(x-lastLbl>=30){g.fillText(String(b.barNo),x+3,25);lastLbl=x}}
+      else if(bs.dense!=='bars'){g.moveTo(x,20);g.lineTo(x,26)}
+    }
+    g.stroke();
+  }
   drawWave();drawBeats();
+}
+/* Slag i tidsrummet [t0,t1] ∩ musikkens udstrækning: [{t,bar,barNo,k}].
+   Ligger slagene tættere end 5 px, vises kun takt-starterne (dense='bars');
+   ligger også de tættere end 5 px, intet. */
+function visibleBeats(t0,t1){
+  const g=gridOf();if(!g)return null;
+  const m=S.music,T=60/g.bpm,px=S.pxPerSec,bar=g.bar||4;
+  let dense=null;
+  if(T*px<5){if(T*bar*px<5)return null;dense='bars'}
+  const a=Math.max(t0,m.start),b=Math.min(t1,musicSpanEnd());
+  if(b<a)return null;
+  const kFirst=Math.ceil((0-g.anchor)/T-1e-9);   /* sangens første slag (fil-tid ≥ 0) */
+  const barBase=Math.floor(kFirst/bar);
+  const out=[];out.dense=dense;
+  for(let k=Math.ceil(beatIdx(a)-1e-9);k<=Math.floor(beatIdx(b)+1e-9);k++){
+    const isBar=((k%bar)+bar)%bar===0;
+    if(dense==='bars'&&!isBar)continue;
+    out.push({t:beatT(k),bar:isBar,barNo:Math.floor(k/bar)-barBase+1,k});
+    if(out.length>4000)break;
+  }
+  return out;
 }
 /* Lærrederne under/over sporene dækker kun det synlige udsnit og følger
    rulningen som linealen (et lærred i fuld tidslinjebredde kan blive
@@ -1784,7 +2003,28 @@ function drawWave(){
     g.fillRect(x,mid-hh,1,hh*2);
   }
 }
-function drawBeats(){tlCanvas($('beatCv'))}
+/* Beat-streger hen over alle spor (også klippene), så man kan se hvor
+   klipskiftene ligger i forhold til slagene. Afsnitsgrænser fra
+   kickgrid.json (novelty) står som ravgule streger. */
+function drawBeats(){
+  const{g,h}=tlCanvas($('beatCv'));
+  const gr=gridOf();if(!gr)return;
+  const sl=tlScroll.scrollLeft,px=S.pxPerSec,t0=sl/px,t1=(sl+tlScroll.clientWidth)/px;
+  const bs=visibleBeats(t0,t1);
+  if(bs){
+    g.lineWidth=1;
+    for(const pass of[0,1]){
+      g.strokeStyle=pass?'rgba(255,123,230,.34)':'rgba(255,123,230,.13)';g.beginPath();
+      for(const b of bs){if(b.bar!==!!pass)continue;const x=Math.round(b.t*px-sl)+0.5;g.moveTo(x,0);g.lineTo(x,h)}
+      g.stroke();
+    }
+  }
+  if(gr.novelty&&gr.novelty.length){
+    const m=S.music;g.strokeStyle='rgba(255,169,92,.6)';g.setLineDash([4,3]);g.beginPath();
+    for(const f of gr.novelty){const t=m.start+f-m.in;if(t<Math.max(t0,m.start)||t>Math.min(t1,musicSpanEnd()))continue;const x=Math.round(t*px-sl)+0.5;g.moveTo(x,0);g.lineTo(x,h)}
+    g.stroke();g.setLineDash([]);
+  }
+}
 function fmtClock(t){const m=Math.floor(t/60),s=t%60;return m?`${m}:${String(Math.floor(s)).padStart(2,'0')}`:(Number.isInteger(s)?s+'s':s.toFixed(1)+'s')}
 tlScroll.addEventListener('scroll',drawRuler);
 addEventListener('resize',()=>{drawRuler();invalidate()});
@@ -2150,6 +2390,55 @@ function inspMusic(B){
   bh.onclick=()=>{m.start=S.t;renderTL();renderInsp();markDirty('flyt musik');musicChanged()};
   const bx=el('button','sbtn danger',ICO('trash')+' Fjern musik');bx.onclick=removeMusic;
   br.append(bh,bx);s1.appendChild(br);
+  inspGrid(B,m);
+}
+/* Beat-grid: estimat, import af kickgrid.json, BPM (×2/÷2), første slag
+   (±1 billede), klip på beat. */
+function inspGrid(B,m){
+  const g=m.grid;
+  const s=sec(B,'Beat-grid');
+  const gi=el('button','sbtn',ICO('upload')+' Importér kickgrid.json');gi.title='Beat-grid målt af beat-sync-skillen (analyze_song.py)';gi.onclick=()=>$('gridInput').click();
+  if(!g){
+    s.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);line-height:1.6;margin-bottom:8px">Intet beat-grid endnu. Med et grid viser linealen slag og takter, klip og tekster snapper til slagene, og "Klip på beat" kan skære alle klip til.</div>`));
+    const r=el('div','btnRow');
+    const be=el('button','sbtn acc',ICO('waveform')+' Find slag i musikken');be.onclick=estimateMusicGrid;be.disabled=!!m.missing;
+    r.append(be,gi);s.appendChild(r);
+    return;
+  }
+  const T=60/g.bpm;
+  s.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);line-height:1.6;margin-bottom:8px">${g.src==='kickgrid'?'Importeret fra kickgrid.json':g.src==='estimat'?'Estimeret i browseren — tjek at stregerne rammer slagene':'Sat i hånden'} · slag ${T.toFixed(4).replace('.',',')} s · takt ${(T*(g.bar||4)).toFixed(3).replace('.',',')} s${g.novelty&&g.novelty.length?` · ${g.novelty.length} afsnitsgrænser`:''}</div>`));
+  const bpmIn=num(s,'BPM',g,'bpm',20,400,0.01,{tl:1,cb:()=>{g.src='manuel'}});
+  bpmIn.title='Tempo i slag pr. minut';
+  const r1=el('div','btnRow');
+  const x2=el('button','sbtn','×2');x2.title='Dobbelt tempo (gridet er halvt så hurtigt som musikken)';
+  const d2=el('button','sbtn','÷2');d2.title='Halvt tempo (gridet er dobbelt så hurtigt som musikken)';
+  x2.onclick=()=>{g.bpm=clamp(g.bpm*2,20,400);renderTL();renderInsp();markDirty('BPM ×2');invalidate()};
+  d2.onclick=()=>{g.bpm=clamp(g.bpm/2,20,400);renderTL();renderInsp();markDirty('BPM ÷2');invalidate()};
+  r1.append(x2,d2);s.appendChild(r1);
+  num(s,'Første slag (s)',g,'anchor',0,1e5,0.001,{tl:1});
+  const r2=el('div','btnRow');
+  const nudge=d=>{g.anchor=Math.max(0,g.anchor+d/S.proj.fps);renderTL();renderInsp();markDirty('skub beat-grid');invalidate()};
+  const nl=el('button','sbtn',ICO('chevron-left')+' 1 billede');nl.title='Skub gridet ét billede tidligere';nl.onclick=()=>nudge(-1);
+  const nr=el('button','sbtn','1 billede '+ICO('chevron-right'));nr.title='Skub gridet ét billede senere';nr.onclick=()=>nudge(1);
+  const ni=el('button','sbtn','Ind-punkt på slag');ni.title='Flyt musikkens ind-punkt til nærmeste slag, så sangen starter på et slag';
+  ni.onclick=()=>{const k=Math.round((m.in-g.anchor)/T);let v=g.anchor+k*T;if(v<0)v+=T;m.in=v;renderTL();renderInsp();markDirty('ind-punkt på slag');musicChanged();invalidate()};
+  r2.append(nl,nr,ni);s.appendChild(r2);
+  /* Klip på beat */
+  const s2=sec(B,'Klip på beat');
+  S.beatN=S.beatN||4;
+  const opts=[['1','1 slag'],['2','2 slag'],['4','4 slag'],['8','8 slag'],['bar','1 takt']];
+  const rr=row('Hvert klip'),sl=el('select');
+  for(const[v,t]of opts){const o=el('option',null,t);o.value=v;if(String(S.beatN)===v)o.selected=true;sl.appendChild(o)}
+  sl.onchange=()=>{S.beatN=sl.value==='bar'?'bar':+sl.value};
+  rr.appendChild(sl);s2.appendChild(rr);
+  const r3=el('div','btnRow');
+  const bc=el('button','sbtn acc',ICO('scissors')+' Klip alle klip på beat');bc.title='Sæt hvert klips længde til det valgte antal slag, så alle klipskift ligger på slag';
+  bc.onclick=()=>cutOnBeats(S.beatN==='bar'?(g.bar||4):S.beatN);bc.disabled=!S.clips.length;
+  r3.appendChild(bc);s2.appendChild(r3);
+  const r4=el('div','btnRow');
+  const be=el('button','sbtn',ICO('waveform')+' Find slag igen');be.onclick=estimateMusicGrid;be.disabled=!!m.missing;
+  const bx=el('button','sbtn danger','Fjern grid');bx.onclick=()=>{m.grid=null;renderTL();renderInsp();markDirty('fjern beat-grid');invalidate()};
+  r4.append(be,gi,bx);s.appendChild(r4);
 }
 function inspFile(B){
   const f=S.files.find(x=>x.id===S.sel.id);
