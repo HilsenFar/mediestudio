@@ -1129,6 +1129,28 @@ function drawBlurBg(c2,src,sw,sh,W,H,alpha,filter){
   c2.filter='none';c2.fillStyle='rgba(0,0,0,.35)';c2.fillRect(0,0,W,H);
   c2.restore();
 }
+/* ---------- Klipskift-effekter og puls på slag ----------
+   Regnes ud fra klippets lokale tid og tidslinjetiden alene, så preview,
+   MP4 og WebM tegner præcis det samme. */
+const CUT_FX={flash:'Hvidt blink',punch:'Zoom-stød',black:'Sort blink'};
+const CUT_FX_DUR=0.12;
+function cutFxScale(c,local){return c.cutFx==='punch'?1+0.08*Math.max(0,1-local/0.18):1}
+/* Skala-puls der toppes på hvert slag og klinger af (tidskonstant 90 ms),
+   kun hvor musikken lyder. */
+function pulseScale(t){
+  const m=S.music,g=gridOf();
+  if(!g||!(m.pulse>0)||m.missing||t<m.start||t>musicEndT())return 1;
+  const x=beatIdx(t),ph=(x-Math.floor(x))*60/g.bpm;
+  return 1+m.pulse*Math.exp(-ph/0.09);
+}
+function drawCutFx(c2,c,local,W,H){
+  if(!c.cutFx||local>=CUT_FX_DUR)return;
+  let a=0,col='';
+  if(c.cutFx==='flash'){a=0.9*(1-local/CUT_FX_DUR);col='255,255,255'}
+  else if(c.cutFx==='black'){a=local<0.07?1:1-(local-0.07)/(CUT_FX_DUR-0.07);col='0,0,0'}
+  if(a<=0)return;
+  c2.save();c2.fillStyle=`rgba(${col},${a.toFixed(3)})`;c2.fillRect(0,0,W,H);c2.restore();
+}
 function drawFrame(t,c2,opts){
   opts=opts||{};
   const W=c2.canvas.width,H=c2.canvas.height;
@@ -1144,13 +1166,18 @@ function drawFrame(t,c2,opts){
     const c=ca.c,it=fileOf(c);
     let src=null,sw=0,sh=0;
     if(c.type==='video'){
-      const el=opts.videoEl||vidElFor(c);
-      if(el&&el.readyState>=2){src=el;sw=el.videoWidth;sh=el.videoHeight}
+      /* opts.src: et fastholdt kildebillede (MP4-eksportens mellembilleder). */
+      if(opts.src){src=opts.src;sw=opts.sw;sh=opts.sh}
+      else{
+        const el=opts.videoEl||vidElFor(c);
+        if(el&&el.readyState>=2){src=el;sw=el.videoWidth;sh=el.videoHeight}
+      }
     }else if(it&&it.imgEl){src=it.imgEl;sw=it.w;sh=it.h}
     if(src&&sw&&sh){
       const d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
       const fitIn=c.fit==='contain'||c.fit==='blur';
       let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
+      const bump=cutFxScale(c,ca.local)*pulseScale(t);
       /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
       if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fadeGain(c,ca.local),hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
       let ox=0,oy=0;
@@ -1160,7 +1187,8 @@ function drawFrame(t,c2,opts){
         ox=lerp(k.pxs||0,k.pxe||0,p)*Math.max(0,overW)/2;
         oy=lerp(k.pys||0,k.pye||0,p)*Math.max(0,overH)/2;
       }
-      const dw=sw*scale,dh=sh*scale;
+      /* Zoom-stød og puls skalerer billedet om midten (panoreringen med). */
+      const dw=sw*scale*bump,dh=sh*scale*bump;ox*=bump;oy*=bump;
       c2.save();
       c2.filter=fxFilter(c.fx,bFac);
       c2.globalAlpha=fadeGain(c,ca.local);
@@ -1168,6 +1196,7 @@ function drawFrame(t,c2,opts){
       c2.restore();
     }
   }
+  if(ca&&ca.c)drawCutFx(c2,ca.c,ca.local,W,H);
   /* Tekst-overlays */
   for(const tx of S.texts){
     if(t<tx.start||t>tx.start+tx.dur)continue;
@@ -1729,6 +1758,7 @@ function renderTL(){
     b.style.width=Math.max(14,d*S.pxPerSec-2)+'px';
     if(it&&it.thumb){b.style.backgroundImage=`url(${it.thumb})`;b.style.backgroundSize='auto 100%';b.style.backgroundRepeat='repeat-x'}
     const tags=[];
+    if(c.cutFx&&CUT_FX[c.cutFx])tags.push(`<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-bolt"></use></svg>`);
     if(hasFx(c.fx))tags.push('FX');
     if(c.speed!==1)tags.push(c.speed+'×');
     if(c.type==='image')tags.push('<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-image"></use></svg>');
@@ -2112,7 +2142,7 @@ function splitAtPlayhead(){
     }
     c2.imgDur=c.imgDur-ca.local;c.imgDur=ca.local;c.out=c.imgDur;c2.out=c2.imgDur;
   }
-  c.fadeOut=0;c2.fadeIn=0;
+  c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;   /* et nyt snit får ikke automatisk en skift-effekt */
   S.clips.splice(ca.i+1,0,c2);
   select('clip',c2.id);renderTL();markDirty('del klip');
 }
@@ -2253,6 +2283,14 @@ function inspClip(B,c){
     const bf=el('button','sbtn','Brug denne tilpasning på alle klip');
     bf.onclick=()=>{for(const x of S.clips)x.fit=c.fit;markDirty('tilpasning på alle klip');invalidate();toast(`Tilpasning sat på alle ${S.clips.length} klip`,'ok')};
     const r=el('div','btnRow');r.appendChild(bf);s1.appendChild(r);
+  }
+  /* Effekt ved klipskiftet ind i dette klip (første 0,12-0,18 s). */
+  const sx=sec(B,'Klipskift');
+  selBox(sx,'Ved start',c,'cutFx',['|Ingen',...Object.entries(CUT_FX).map(([k,v])=>`${k}|${v}`)],v=>{if(!v)delete c.cutFx;renderTL()});
+  if(S.clips.length>1){
+    const bx=el('button','sbtn','Brug dette klipskift på alle klip');
+    bx.onclick=()=>{for(const x of S.clips){if(c.cutFx)x.cutFx=c.cutFx;else delete x.cutFx}markDirty('klipskift på alle klip');invalidate();renderTL();toast(`${c.cutFx?CUT_FX[c.cutFx]:'Intet klipskift'} på alle ${S.clips.length} klip`,'ok')};
+    const r=el('div','btnRow');r.appendChild(bx);sx.appendChild(r);
   }
   if(c.type==='image'&&c.kb){
     const s3=sec(B,'Ken Burns (zoom/pan)');
@@ -2423,6 +2461,12 @@ function inspGrid(B,m){
   const ni=el('button','sbtn','Ind-punkt på slag');ni.title='Flyt musikkens ind-punkt til nærmeste slag, så sangen starter på et slag';
   ni.onclick=()=>{const k=Math.round((m.in-g.anchor)/T);let v=g.anchor+k*T;if(v<0)v+=T;m.in=v;renderTL();renderInsp();markDirty('ind-punkt på slag');musicChanged();invalidate()};
   r2.append(nl,nr,ni);s.appendChild(r2);
+  /* Puls på slag: billedet skaleres let op på hvert slag og klinger af. */
+  const pr=row('Puls på slag'),pc=el('input');pc.type='checkbox';pc.checked=m.pulse>0;
+  pc.title='Billedet pulserer (skalerer let op) på hvert slag, hvor musikken lyder';
+  pc.onchange=()=>{m.pulse=pc.checked?0.04:0;markDirty('puls på slag');invalidate();renderInsp()};
+  pr.appendChild(pc);s.appendChild(pr);
+  if(m.pulse>0)rng(s,'Pulsstyrke',m,'pulse',0.01,0.12,0.005,{fmt:x=>'+'+Math.round(x*100)+'%'});
   /* Klip på beat */
   const s2=sec(B,'Klip på beat');
   S.beatN=S.beatN||4;
@@ -2632,6 +2676,7 @@ function applyProject(p,opts){
       in:num(c.in,0,0,1e5),out:num(c.out,type==='image'?4:(f&&f.dur||4),0.05,1e5),imgDur:num(c.imgDur,4,0.2,600),
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'||c.fit==='blur'?c.fit:'cover',
+      ...(Object.prototype.hasOwnProperty.call(CUT_FX,c.cutFx)?{cutFx:c.cutFx}:{}),
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
       kb:kb&&typeof kb==='object'?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),
         pxs:num(kb.pxs,num(kb.px,0,-1,1),-1,1),pxe:num(kb.pxe,-num(kb.px,0,-1,1),-1,1),
@@ -3058,6 +3103,9 @@ async function buildMasterAudio(total){
   if(!any)return null;
   return await oc.startRendering();
 }
+/* Fastholdt kildebillede til MP4-eksportens mellembilleder (se nedenfor). */
+const HELD=document.createElement('canvas'),HELDX=HELD.getContext('2d');
+let lastExportStats=null;
 async function exportMP4(q,size,prog,noSave){
   if(!canMp4())throw new Error(window.Mp4Muxer?'WebCodecs (VideoEncoder) er ikke tilgængelig i denne browser — brug WebM':'MP4-modulet (mp4-muxer.min.js) kunne ikke indlæses — brug WebM');
   const{ecv,ectx,W,H}=makeExpCanvas(size);
@@ -3106,7 +3154,8 @@ async function exportMP4(q,size,prog,noSave){
   }
   /* — video — */
   const expVid=document.createElement('video');expVid.muted=true;expVid.playsInline=true;expVid.preload='auto';
-  let frameIdx=0,lastTs=-1,pend=null;
+  let frameIdx=0,lastTs=-1,pend=null,snapN=0;
+  const stats=lastExportStats={frames:0,drops:0,rewinds:0};
   const keyEvery=fps*2,frameUs=Math.round(1e6/fps);
   /* Hvert billede holdes tilbage til det næste kendes, så dets varighed er
      den reelle afstand, og det sidste billede slutter præcis ved total. */
@@ -3116,27 +3165,32 @@ async function exportMP4(q,size,prog,noSave){
     const fr=new VideoFrame(p.fr,{timestamp:p.ts,duration:Math.max(1000,nextTs-p.ts)});
     p.fr.close();
     venc.encode(fr,{keyFrame:frameIdx%keyEvery===0});
-    fr.close();frameIdx++;
+    fr.close();frameIdx++;stats.frames++;
     while(venc.encodeQueueSize>6)await sleep(4);
     if(encErr)throw encErr;
   };
-  const pushFrame=async(tlT,caOv)=>{
-    drawFrame(tlT,ectx,caOv?{ca:caOv,videoEl:expVid}:{});
-    let ts=(frameIdx===0&&!pend)?0:Math.round(tlT*1e6);   /* første billede = 0 */
+  /* Et billede tegnes og fastfryses som VideoFrame med det samme (synkront,
+     mens kilden viser det rigtige billede) og sendes derefter til encoderen
+     i rækkefølge (asynkront). */
+  const snapFrame=(tlT,caOv,srcOv)=>{
+    drawFrame(tlT,ectx,caOv?Object.assign({ca:caOv,videoEl:expVid},srcOv||{}):{});
+    let ts=snapN===0?0:Math.round(tlT*1e6);   /* første billede = 0 */
     if(ts<=lastTs)ts=lastTs+Math.round(frameUs/2);
-    lastTs=ts;
-    const fr=new VideoFrame(ecv,{timestamp:ts,duration:frameUs});
-    await encPend(ts);
-    pend={fr,ts};
+    lastTs=ts;snapN++;
+    return new VideoFrame(ecv,{timestamp:ts,duration:frameUs});
   };
+  const submit=async fr=>{await encPend(fr.timestamp);pend={fr,ts:fr.timestamp}};
+  const submitAll=async frs=>{let k=0;try{for(;k<frs.length;k++)await submit(frs[k])}catch(e){for(;k<frs.length;k++)try{frs[k].close()}catch(_){}throw e}};
+  const pushFrame=(tlT,caOv)=>submit(snapFrame(tlT,caOv));
   let acc=0;
   try{
     for(let i=0;i<S.clips.length&&!expCancelled;i++){
       const c=S.clips[i],start=acc,d=clipDur(c);acc+=d;
       const it=fileOf(c);
+      /* Billeder skrives i projektets fps: tik k/fps fra klippets start. */
+      const n=Math.max(1,Math.round(d*fps));
       /* Billedklip og pladsholdere (manglende fil) tegnes billede for billede. */
       if(c.type==='image'||!it){
-        const n=Math.max(1,Math.round(d*fps));
         for(let k=0;k<n&&!expCancelled;k++){
           const local=k/fps;
           await pushFrame(start+local,{i,c,local,start});
@@ -3144,16 +3198,36 @@ async function exportMP4(q,size,prog,noSave){
         }
       }else{
         /* Videoklip afspilles i realtid, og hvert leveret billede
-           (requestVideoFrameCallback) tidsstemples ud fra dets mediaTime.
+           (requestVideoFrameCallback) placeres ud fra sit mediaTime.
+           Der skrives ét billede pr. tik i projektets fps, tegnet med det
+           seneste kildebillede før tikket (fastholdt i HELD): en 16 fps-kilde
+           giver ~2 billeder pr. kildebillede, hvert med sin egen tid, så et
+           0,12 s-blink, et zoom-stød eller en puls får alle sine billeder.
+           Springer rVFC kildebilleder over (travl side), spoles der tilbage
+           til sidst leverede billede og afspilles i halv hastighed resten af
+           klippet — tiderne kommer fra mediaTime, så resultatet er det samme.
            rVFC kører ikke mens siden er skjult (anden fane, minimeret eller
            helt dækket vindue): så holdes der pause, og ved visning søges der
            tilbage til sidst leverede billede. En reel standsning er en fejl —
            aldrig et stille "færdig" med frosne afsnit. */
         await new Promise((res,rej)=>{
-          let done=false,guard=null,rv=0,lastMt=-1,paused=false,initPushed=false,cpoll=0;
+          let done=false,guard=null,rv=0,lastMt=-1,prevMt=-1,srcDt=0,nDt=0,rewoundAt=-2,nRew=0,paused=false,cpoll=0,m=0,heldOk=false,busy=Promise.resolve();
           const cleanup=()=>{clearTimeout(guard);clearInterval(cpoll);document.removeEventListener('visibilitychange',onVis);if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}};
-          const finish=()=>{if(done)return;done=true;cleanup();expVid.pause();res()};
-          const fail=e=>{if(done)return;done=true;cleanup();expVid.pause();rej(e)};
+          const capture=()=>{
+            const w=expVid.videoWidth,h=expVid.videoHeight;
+            if(!w||!h||expVid.readyState<2)return;
+            if(HELD.width!==w||HELD.height!==h){HELD.width=w;HELD.height=h}
+            HELDX.drawImage(expVid,0,0,w,h);heldOk=true;
+          };
+          /* Alle tik før L (klippets lokale tid) med det fastholdte billede. */
+          const ticksBefore=L=>{
+            const out=[];
+            while(m<n&&m/fps<L-1e-6){const loc=m/fps;out.push(snapFrame(start+loc,{i,c,local:loc,start},heldOk?{src:HELD,sw:HELD.width,sh:HELD.height}:null));m++}
+            return out;
+          };
+          const finish=()=>{if(done)return;done=true;cleanup();expVid.pause();
+            busy.then(()=>expCancelled?null:submitAll(ticksBefore(Infinity))).then(()=>res(),rej)};
+          const fail=e=>{if(done)return;done=true;cleanup();expVid.pause();busy.catch(()=>{}).then(()=>rej(e))};
           const arm=()=>{clearTimeout(guard);guard=setTimeout(onStall,5000)};
           const onStall=()=>{
             if(done)return;
@@ -3168,18 +3242,15 @@ async function exportMP4(q,size,prog,noSave){
             clearInterval(cpoll);cpoll=setInterval(()=>{if(expCancelled)finish()},250);   /* Annuller virker også under pausen */
           };
           const startAt=t=>{
-            expVid.onseeked=async()=>{
+            expVid.onseeked=()=>{
               expVid.onseeked=null;
               if(done)return;
               if(document.hidden){paused=false;hide();return}
-              if(!initPushed&&expVid.readyState>=2){
-                /* Klippets første billede sættes ind med det samme, så klippet
-                   starter til tiden selv om første rVFC-billede er et hak senere. */
-                initPushed=true;lastMt=c.in;
-                try{await pushFrame(start,{i,c,local:0,start})}catch(e){fail(e);return}
-              }
+              /* Billedet ved søgepunktet fastholdes: klippets første billede,
+                 eller det sidst leverede efter en pause/tilbagespoling. */
+              capture();if(lastMt<0)lastMt=c.in;prevMt=-1;
               arm();rv=expVid.requestVideoFrameCallback(onFrame);
-              try{await expVid.play()}catch(e){fail(e)}
+              expVid.play().catch(e=>{if(!e||e.name!=='AbortError')fail(e||new Error('afspilning fejlede'))});
             };
             expVid.currentTime=t;
           };
@@ -3189,20 +3260,37 @@ async function exportMP4(q,size,prog,noSave){
             else if(paused){paused=false;clearInterval(cpoll);startAt(lastMt>=0?lastMt:clamp(c.in,0,Math.max(0,(it.dur||1)-0.01)))}
           };
           document.addEventListener('visibilitychange',onVis);
-          const onFrame=async(now,md)=>{
+          const rewind=()=>{
+            rewoundAt=lastMt;nRew++;stats.rewinds++;
+            if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}
+            expVid.pause();expVid.playbackRate=clamp(c.speed*0.5,0.0625,16);
+            startAt(lastMt);
+          };
+          const onFrame=(now,md)=>{
             rv=0;
             if(done||paused)return;
             arm();
             const mt=md.mediaTime;
             if(mt>=c.out-0.001){finish();return}
             if(mt>lastMt+1e-4&&mt>=c.in-0.02){
-              lastMt=mt;
-              const local=clamp((mt-c.in)/c.speed,0,d);
-              try{await pushFrame(start+local,{i,c,local,start})}catch(e){fail(e);return}
-              prog((start+local)/total,`Klip ${i+1}/${S.clips.length} · ${fmtT(start+local)} / ${fmtT(total)}`);
+              /* Hul i kildebillederne (mere end 1,8 × det mindste interval)? */
+              const dt=prevMt>=0?mt-prevMt:0;
+              if(dt>0&&nDt>=2&&dt>srcDt*1.8){stats.drops++;if(rewoundAt!==lastMt&&nRew<12){rewind();return}}
+              if(dt>0){srcDt=nDt?Math.min(srcDt,dt):dt;nDt++}
+              prevMt=mt;
+              const L=clamp((mt-c.in)/c.speed,0,d);
+              const frs=ticksBefore(L);capture();lastMt=mt;
+              busy=busy.then(()=>submitAll(frs));
+              busy.then(()=>{
+                if(done)return;
+                prog((start+L)/total,`Klip ${i+1}/${S.clips.length} · ${fmtT(start+L)} / ${fmtT(total)}`);
+                if(expCancelled){finish();return}
+                if(!paused)rv=expVid.requestVideoFrameCallback(onFrame);
+              },fail);
+              return;
             }
             if(expCancelled){finish();return}
-            if(!done&&!paused)rv=expVid.requestVideoFrameCallback(onFrame);
+            rv=expVid.requestVideoFrameCallback(onFrame);
           };
           expVid.onerror=()=>fail(new Error('Klippet kan ikke afkodes: '+it.name));
           expVid.onended=finish;
