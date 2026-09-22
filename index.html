@@ -209,10 +209,13 @@ input,select,textarea,button{font:inherit;color:inherit}
 #binFoot .sbtn{flex:none;padding:3px 8px;font-size:var(--gt-t-xs)}
 /* Sortering + Opdater mappe. Egen række, så den ikke deler klasse med
    filter-chipsene (deres klikhandler sætter S.filter). */
-#binBar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:var(--gt-t-xs);color:var(--dim)}
+#binBar{display:flex;flex-wrap:wrap;row-gap:5px;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:var(--gt-t-xs);color:var(--dim)}
 #binBar select{background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:2px 6px;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
 #binBar select:focus{border-color:var(--acc)}
-#binBar .tbtn{padding:2px 8px;font-size:var(--gt-t-xs)}
+#binBar .tbtn{padding:2px 6px;font-size:var(--gt-t-xs)}
+/* Knapperne (Fra GenStudio · Opdater mappe) står højrestillet og brydes
+   samlet ned på en egen linje når de ikke er plads ved sorteringen. */
+#binBtns{display:flex;gap:6px;margin-left:auto}
 
 /* ---------- Preview ---------- */
 #previewWrap{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--gt-void)}
@@ -351,8 +354,25 @@ body.focusMode #main{grid-template-columns:1fr}
 kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2px;border-radius:var(--gt-r-1);padding:0 5px;font-size:var(--gt-t-xs);font-family:var(--gt-font-mono)}
 
 /* ---------- Modal / progress / toast ---------- */
-#modalBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:60}
-#modalBack.open{display:flex}
+#modalBack,#gsBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:60}
+#modalBack.open,#gsBack.open{display:flex}
+/* Fra GenStudio: bredere dialog med en rulleliste af færdige resultater. */
+#gsBack .modal{width:600px}
+#gsBar{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--dim);margin-bottom:8px}
+#gsBar label{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+#gsBar input{accent-color:var(--acc);width:15px;height:15px}
+#gsCount{margin-left:auto;font-size:var(--gt-t-xs);color:var(--faint)}
+#gsList{max-height:min(52vh,460px);overflow-y:auto;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--gt-sub-1)}
+.gsRow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer}
+.gsRow:last-child{border-bottom:none}
+.gsRow:hover{background:var(--panel3)}
+.gsRow input{accent-color:var(--acc);width:15px;height:15px;flex:none}
+.gsTh{width:72px;height:44px;flex:none;border-radius:var(--gt-r-1);background:#000;object-fit:cover;display:flex;align-items:center;justify-content:center;color:var(--faint)}
+.gsTx{min-width:0;flex:1;font-size:12px;line-height:1.4}
+.gsTx .p{color:var(--txt);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.gsTx .meta{font-size:var(--gt-t-xs);color:var(--faint);display:flex;gap:6px;align-items:center}
+#gsEmpty{padding:22px;text-align:center;color:var(--faint);font-size:12px}
+#gsMsg{min-height:18px;margin-top:8px;font-size:12px;color:var(--dim)}
 .modal{background:linear-gradient(180deg,var(--gt-pl-1),var(--gt-sub-1));border:1px solid var(--gt-edge-bezel);border-radius:var(--gt-r-4);box-shadow:var(--gt-e-4);width:430px;max-width:92vw;padding:18px 20px}
 .modal h2{font-family:var(--gt-font-ui);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:var(--gt-track-head);margin-bottom:14px}
 .modal .row label{width:110px}
@@ -463,8 +483,10 @@ textarea:focus-visible,
         <option value="new">Nyeste først</option>
         <option value="name">Navn</option>
       </select>
-      <span class="grow"></span>
+      <span id="binBtns">
+      <button class="tbtn" id="btnGenStudio" title="Hent færdige resultater fra GenStudio" style="display:none"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-spark"></use></svg> Fra GenStudio</button>
       <button class="tbtn" id="btnRefreshDir" title="Hent nye filer fra den åbne mappe" style="display:none"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-refresh"></use></svg> Opdater mappe</button>
+      </span>
     </div>
     <div id="binGrid">
       <div id="binEmpty">
@@ -587,6 +609,23 @@ textarea:focus-visible,
     <div class="btnRow" style="margin-top:14px;justify-content:flex-end;display:flex">
       <button class="sbtn" id="expCancel">Annuller</button>
       <button class="sbtn acc" id="expGo">Start eksport</button>
+    </div>
+  </div>
+</div>
+
+<div id="gsBack">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="gsTitle">
+    <h2 id="gsTitle">Fra GenStudio</h2>
+    <div id="gsBar">
+      <label><input type="checkbox" id="gsFav"> Kun favoritter</label>
+      <label><input type="checkbox" id="gsAll"> Vælg alle viste</label>
+      <span id="gsCount"></span>
+    </div>
+    <div id="gsList"></div>
+    <div id="gsMsg" role="status"></div>
+    <div class="btnRow" style="margin-top:10px;justify-content:flex-end;display:flex">
+      <button class="sbtn" id="gsCancel">Annuller</button>
+      <button class="sbtn acc" id="gsGo" disabled>Importér valgte</button>
     </div>
   </div>
 </div>
@@ -2855,6 +2894,18 @@ $('projInput').onchange=async e=>{
    TASTATUR
    ================================================================ */
 addEventListener('keydown',e=>{
+  /* Åben GenStudio-dialog: samme semantik som eksport-dialogen nedenfor
+     (Escape lukker, Tab holdes inde, ingen globale genveje imens). */
+  if($('gsBack').classList.contains('open')){
+    if(e.key==='Escape'&&!GS.busy){e.preventDefault();gsClose();return}
+    if(e.key==='Tab'){
+      const f=[...$('gsBack').querySelectorAll('button,input,select')].filter(x=>x.offsetParent&&!x.disabled);
+      const i=f.indexOf(document.activeElement);
+      if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}
+      else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}
+    }
+    return;
+  }
   /* Åben eksport-dialog: Escape lukker (ikke under kørende eksport), og Tab
      holdes inde i dialogen. Står FØR expRunning-spærren, så fælden også
      virker mens der eksporteres. */
@@ -3377,6 +3428,162 @@ function exportWebM(q,prog,size){
 </script>
 <script>
 /* ================================================================
+   FRA GENSTUDIO — kun når appen serveres af GenStudio (samme origin,
+   http://127.0.0.1:<port>/medie/). GenStudio har /api/jobs og
+   /media/outputs/<fil>; det udgivne site og file:// har ikke, og der
+   spørges kun når appen kører lokalt, så det offentlige site aldrig
+   laver en 404 i konsollen.
+   ================================================================ */
+const GS={ok:false,jobs:[],busy:false,prevFocus:null,io:null};
+const GS_LOCAL=/^https?:$/.test(location.protocol)&&/^((.+\.)?localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(location.hostname);
+/* Læsbart filnavn: promptens begyndelse (æ/ø/å → ae/oe/aa, som GenStudios
+   egne download-navne) + de første tegn af job-id'et, så to resultater af
+   samme prompt ikke får samme navn. Højst 60 tegn før endelsen. */
+function slugDa(s,max){
+  return String(s||'').toLowerCase().replace(/æ/g,'ae').replace(/ø/g,'oe').replace(/å/g,'aa')
+    .normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,max).replace(/-+$/,'');
+}
+function gsFileName(job,out,idx){
+  const ext=(String(out.file).split('.').pop()||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const id=String(job.id||out.file).replace(/[^a-z0-9]/gi,'').slice(0,6).toLowerCase()+(idx>0?'-'+(idx+1):'');
+  const base=slugDa(job.prompt,60-id.length-1)||slugDa(job.modelLabel,60-id.length-1)||'genstudio';
+  return `${base}-${id}.${ext}`;
+}
+async function gsFetchJobs(){
+  const r=await fetch('/api/jobs',{cache:'no-store',headers:{accept:'application/json'}});
+  if(!r.ok||!/json/i.test(r.headers.get('content-type')||''))throw new Error('ikke GenStudio');
+  const j=await r.json();
+  if(!j||!Array.isArray(j.jobs))throw new Error('ikke GenStudio');
+  return j.jobs;
+}
+/* Færdige resultater, nyeste først: [{job,out,idx,name,kind,t}]. */
+function gsItems(){
+  const out=[];
+  for(const job of GS.jobs){
+    if(!job||job.status!=='done'||!Array.isArray(job.outputs))continue;
+    job.outputs.forEach((o,idx)=>{
+      if(!o||typeof o.file!=='string'||!/^(video|image|audio)$/.test(o.kind)||!isMediaName(o.file))return;
+      const t=Date.parse(job.finishedAt||job.createdAt||'')||0;
+      out.push({job,out:o,idx,name:gsFileName(job,o,idx),kind:o.kind,t});
+    });
+  }
+  return out.sort((a,b)=>b.t-a.t);
+}
+async function gsFile(it){
+  const r=await fetch('/media/outputs/'+encodeURIComponent(it.out.file),{cache:'no-store'});
+  if(!r.ok)throw new Error(`${it.out.file}: ${r.status}`);
+  const b=await r.blob();
+  return new File([b],it.name,{type:b.type||'',lastModified:it.t||Date.now()});
+}
+function gsRender(){
+  const L=$('gsList'),fav=$('gsFav').checked;
+  if(GS.io)GS.io.disconnect();
+  L.innerHTML='';
+  const items=gsItems().filter(x=>!fav||x.job.favorite);
+  const have=new Set(S.files.map(f=>f.name));
+  if(!items.length){L.innerHTML=`<div id="gsEmpty">${fav?'Ingen færdige favoritter i GenStudio.':'Ingen færdige resultater i GenStudio endnu.'}</div>`}
+  /* Videoer får et forhåndsbillede først når rækken ruller ind i synsfeltet. */
+  GS.io='IntersectionObserver' in window?new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const v=e.target;GS.io.unobserve(v);v.preload='metadata';v.src=v.dataset.src}},{root:L}):null;
+  for(const x of items){
+    const row=document.createElement('label');row.className='gsRow';
+    const url='/media/outputs/'+encodeURIComponent(x.out.file);
+    const th=x.kind==='image'?`<img class="gsTh" loading="lazy" alt="" src="${esc(url)}">`
+      :x.kind==='video'?`<video class="gsTh" muted playsinline preload="none" data-src="${esc(url)}#t=0.3"></video>`
+      :`<span class="gsTh">${ICO('music')}</span>`;
+    const when=x.t?new Date(x.t).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const kindTxt={video:'Video',image:'Billede',audio:'Lyd'}[x.kind];
+    row.innerHTML=`<input type="checkbox">${th}<span class="gsTx"><span class="p">${esc(x.job.prompt||x.job.modelLabel||x.out.file)}</span>
+      <span class="meta">${x.job.favorite?ICO('star','gi--sm'):''}${esc(kindTxt)} · ${esc(x.job.modelLabel||x.job.model||'')}${when?' · '+esc(when):''}${have.has(x.name)?' · i biblioteket':''}</span></span>`;
+    const cb=row.querySelector('input');cb._item=x;cb.setAttribute('aria-label',`${kindTxt}: ${(x.job.prompt||x.out.file).slice(0,80)}`);
+    cb.onchange=gsUpdate;
+    L.appendChild(row);
+    const v=row.querySelector('video');if(v){if(GS.io)GS.io.observe(v);else{v.preload='metadata';v.src=v.dataset.src}}
+  }
+  gsUpdate();
+}
+function gsChecked(){return[...$('gsList').querySelectorAll('input[type=checkbox]')].filter(c=>c.checked)}
+function gsUpdate(){
+  const all=[...$('gsList').querySelectorAll('input[type=checkbox]')],n=gsChecked().length;
+  $('gsCount').textContent=`${all.length} resultater${n?` · ${n} valgt`:''}`;
+  $('gsAll').checked=all.length>0&&n===all.length;
+  $('gsGo').disabled=!n||GS.busy;
+  $('gsGo').textContent=n?`Importér ${n} valgte`:'Importér valgte';
+}
+async function gsOpen(){
+  if(GS.busy)return;
+  GS.prevFocus=document.activeElement;
+  $('gsMsg').textContent='Henter listen fra GenStudio…';
+  $('gsList').innerHTML='';
+  $('gsBack').classList.add('open');
+  try{GS.jobs=await gsFetchJobs();$('gsMsg').textContent=''}
+  catch(e){$('gsMsg').textContent='GenStudio svarer ikke — kører det stadig?';GS.jobs=[]}
+  gsRender();
+  const first=$('gsList').querySelector('input');(first||$('gsCancel')).focus();
+}
+function gsClose(){
+  $('gsBack').classList.remove('open');
+  if(GS.io){GS.io.disconnect();GS.io=null}
+  for(const v of $('gsList').querySelectorAll('video')){v.removeAttribute('src');v.load()}
+  $('gsList').innerHTML='';
+  const p=GS.prevFocus;GS.prevFocus=null;
+  if(p&&p.isConnected&&typeof p.focus==='function')p.focus();
+}
+$('btnGenStudio').onclick=gsOpen;
+$('gsCancel').onclick=()=>{if(!GS.busy)gsClose()};
+$('gsFav').onchange=gsRender;
+$('gsAll').onchange=()=>{const v=$('gsAll').checked;for(const c of $('gsList').querySelectorAll('input[type=checkbox]'))c.checked=v;gsUpdate()};
+$('gsGo').onclick=async()=>{
+  const sel=gsChecked().map(c=>c._item);if(!sel.length||GS.busy)return;
+  GS.busy=true;$('gsGo').disabled=true;$('gsCancel').disabled=true;
+  const files=[],fails=[];
+  for(let k=0;k<sel.length;k++){
+    $('gsMsg').textContent=`Henter ${k+1} af ${sel.length}…`;
+    try{files.push(await gsFile(sel[k]))}catch(e){console.warn('GenStudio-hentning fejlede',e);fails.push(sel[k].name)}
+  }
+  GS.busy=false;$('gsCancel').disabled=false;
+  gsClose();
+  if(files.length){
+    const before=S.files.length;
+    await addMediaFiles(files);
+    const n=S.files.length-before;
+    toast(`${n?`${n} ${n===1?'medie':'medier'} hentet fra GenStudio`:'Alle valgte ligger allerede i biblioteket'}${fails.length?` · ${fails.length} kunne ikke hentes`:''}`,fails.length?'err':'ok');
+  }else if(fails.length)toast('GenStudio-filerne kunne ikke hentes','err');
+};
+/* ?genstudio=<fil> (GenStudios viewer-knap "MedieStudio"): hent filen, og
+   læg den på tidslinjen (lyd: som musik) hvis der ikke er noget i forvejen —
+   ellers kun i biblioteket med en besked. Parameteren fjernes bagefter, så
+   en genindlæsning ikke henter filen igen. */
+async function gsAutoImport(file){
+  try{
+    const u=new URL(location.href);u.searchParams.delete('genstudio');
+    history.replaceState(history.state,'',u.pathname+u.search+u.hash);
+  }catch(e){}
+  if(!isMediaName(file)){toast('GenStudio-filen er ikke en video, et billede eller en lyd: '+file,'err');return}
+  let it=gsItems().find(x=>x.out.file===file);
+  /* Ikke i joblisten (fx slettet siden): filens eget navn. */
+  if(!it)it={job:{id:file},out:{file,kind:kindOfName(file)},idx:0,name:file.replace(/[^\w.-]+/g,'-'),kind:kindOfName(file),t:Date.now()};
+  let f;
+  try{f=await gsFile(it)}catch(e){console.warn('GenStudio-hentning fejlede',e);toast('Kunne ikke hente '+file+' fra GenStudio','err');return}
+  await addMediaFiles([f]);
+  const m=S.files.find(x=>x.name===f.name&&x.size===f.size)||S.files.find(x=>x.name===f.name);
+  if(!m)return;
+  if(m.err){toast(`${m.name} kan ikke bruges: ${m.err}`,'err');return}
+  if(m.type==='audio'){
+    if(!S.music){setMusicFromFile(m);return}
+    toast(`${m.name} er lagt i biblioteket — projektet har allerede musik`,'',{ms:6000});
+  }else if(!S.clips.length){addClipFromFile(m)}
+  else toast(`${m.name} er lagt i biblioteket — tidslinjen er ikke tom`,'',{ms:6000});
+}
+async function gsDetect(){
+  if(!GS_LOCAL)return;
+  try{GS.jobs=await gsFetchJobs();GS.ok=true}catch(e){return}
+  $('btnGenStudio').style.display='inline-flex';
+  const want=new URLSearchParams(location.search).get('genstudio');
+  if(want&&!SELFTEST)await gsAutoImport(want);
+}
+</script>
+<script>
+/* ================================================================
    SELVTEST (?selftest) + OPSTART
    ================================================================ */
 function stBadge(txt,ok){
@@ -3586,11 +3793,15 @@ function netBadgeUpdate(){
   }
   narrowCheck();
   narrowMQ.addEventListener('change',narrowCheck);
-  /* Service worker kun på det udgivne https-site. Lokalt (GenStudio på
-     127.0.0.1:8340/medie/, dev-servere) registreres den ikke, så en lokal
-     opdatering af filerne altid slår igennem ved næste indlæsning. */
-  const localServe=location.port==='8340'||/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  /* Service worker kun på det udgivne https-site. Lokalt — localhost,
+     *.localhost, 127.x.x.x og ::1, uanset port (GenStudio på :8340 eller
+     udviklingsserveren på :8360, dev-servere) — registreres den ikke, så en
+     lokal opdatering af filerne altid slår igennem ved næste indlæsning. */
+  const localServe=location.port==='8340'||/^((.+\.)?localhost|127(\.\d{1,3}){3}|\[::1\])$/i.test(location.hostname);
   if('serviceWorker' in navigator&&location.protocol==='https:'&&!localServe)setupServiceWorker();
+  /* Serveres appen af GenStudio (samme origin), vises "Fra GenStudio", og
+     ?genstudio=<fil> hentes ind. */
+  gsDetect();
   requestAnimationFrame(()=>{drawRuler();invalidate()});
   /* Linealen tegnes i UI-fonten; tegn igen når den er hentet. */
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(drawRuler);
