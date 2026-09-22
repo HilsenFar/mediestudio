@@ -568,7 +568,10 @@ const VID_EXT=/\.(mp4|mov|m4v|webm|mkv)$/i, IMG_EXT=/\.(jpe?g|png|webp|gif|bmp)$
 
 /* ---------- Tilstand ---------- */
 const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0};
-const defaultKb=()=>({zs:1.0,ze:1.1,px:0,py:0});
+/* Ken Burns: zoom zs→ze og pan fra (pxs,pys) til (pxe,pye), begge i andele
+   af den halve overflade der rager ud. Gamle projekter havde et symmetrisk
+   px/py (= pxs:px, pxe:-px), som applyProject omregner. */
+const defaultKb=()=>({zs:1.0,ze:1.1,pxs:0,pxe:0,pys:0,pye:0});
 const S={
   files:[],            // {id,name,size,mtime,file,url,type,dur,w,h,thumb,err}
   clips:[],            // {id,fid,type,in,out,speed,volume,fadeIn,fadeOut,fit,fx,imgDur,kb:{zs,ze,pxs,pxe,pys,pye},missing?:{name,size}}
@@ -889,10 +892,10 @@ function drawFrame(t,c2,opts){
       let scale=(c.fit==='contain')?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
       let ox=0,oy=0;
       if(c.type==='image'&&c.kb){
-        const z=lerp(c.kb.zs,c.kb.ze,p);scale*=z;
+        const k=c.kb,z=lerp(k.zs,k.ze,p);scale*=z;
         const overW=sw*scale-W,overH=sh*scale-H;
-        ox=(c.kb.px||0)*Math.max(0,overW)/2*(p*2-1)*-1;
-        oy=(c.kb.py||0)*Math.max(0,overH)/2*(p*2-1)*-1;
+        ox=lerp(k.pxs||0,k.pxe||0,p)*Math.max(0,overW)/2;
+        oy=lerp(k.pys||0,k.pye||0,p)*Math.max(0,overH)/2;
       }
       const dw=sw*scale,dh=sh*scale;
       c2.save();
@@ -967,13 +970,37 @@ let webmCtx=null;   /* sat under WebM-eksport i anden størrelse end projektet *
 let vActive=vA,vNext=vB,curIdx=-1,lastWall=0,needsDraw=true,seekBusy=false,seekPend=null,seekGuard=null;
 function invalidate(){needsDraw=true}
 function vidElFor(c){return vActive._cid===c.id?vActive:(vNext._cid===c.id?vNext:vActive)}
+/* Returnerer true når elementet fik en ny kilde. */
 function prepEl(el,c,local){
-  const it=fileOf(c);if(!it)return;
-  if(el._fid!==it.id){el.src=it.url;el._fid=it.id}
+  const it=fileOf(c);if(!it)return false;
+  let changed=false;
+  if(el._fid!==it.id){el.src=it.url;el._fid=it.id;changed=true}
   el._cid=c.id;
   el.playbackRate=clamp(c.speed,0.0625,16);
   const target=clamp(c.in+(local||0)*c.speed,0,Math.max(0,(it.dur||0)-0.001));
   try{el.currentTime=target}catch(e){}
+  return changed;
+}
+/* Efter et kildeskift gemmer Chromium et currentTime på 0 som "default
+   playback start position" og søger aldrig, så der kommer intet 'seeked'.
+   Derfor tegnes der også på loadeddata, og en søgning efter kildeskift
+   regnes som færdig ved loadeddata — ellers stod preview sort i 5 s efter
+   Home eller dobbeltklik på et klip. */
+for(const v of[vA,vB]){v.addEventListener('loadeddata',invalidate);v.addEventListener('seeked',invalidate)}
+let seekTok=null;
+function startSeek(el,c,local){
+  const tok={};seekTok=tok;seekBusy=true;
+  const changed=prepEl(el,c,local);
+  const fin=()=>{
+    if(seekTok!==tok)return;
+    seekTok=null;el.removeEventListener('seeked',fin);el.removeEventListener('loadeddata',fin);
+    clearTimeout(seekGuard);seekGuard=null;seekBusy=false;invalidate();
+    if(seekPend){const p=seekPend;seekPend=null;startSeek(el,p.c,p.local)}
+  };
+  el.addEventListener('seeked',fin);
+  if(changed)el.addEventListener('loadeddata',fin);
+  clearTimeout(seekGuard);
+  seekGuard=setTimeout(()=>{console.warn('seek timeout — frigiver seekBusy');fin()},5000);
 }
 function preloadNext(i){
   const n=S.clips[i+1];
@@ -1022,20 +1049,8 @@ function seekTo(t,keepPlaying){
   const ca=clipAt(t);
   if(ca&&isVid(ca.c)){
     curIdx=ca.i;
-    const el=vActive;
     if(seekBusy){seekPend={c:ca.c,local:ca.local}}
-    else{
-      const armGuard=()=>{clearTimeout(seekGuard);seekGuard=setTimeout(()=>{console.warn('seek timeout — frigiver seekBusy');done()},5000)};
-      const done=()=>{
-        clearTimeout(seekGuard);seekGuard=null;
-        seekBusy=false;invalidate();
-        if(seekPend){const p=seekPend;seekPend=null;seekBusy=true;prepEl(el,p.c,p.local);armGuard()}
-        else el.onseeked=null;
-      };
-      seekBusy=true;prepEl(el,ca.c,ca.local);
-      el.onseeked=done;
-      armGuard();
-    }
+    else startSeek(vActive,ca.c,ca.local);
   }else if(ca){curIdx=ca.i}
   invalidate();
   if(was||keepPlaying)play();
@@ -1322,6 +1337,12 @@ function splitAtPlayhead(){
     const cut=c.in+ca.local*c.speed;
     c2.in=cut;c2.out=c.out;c.out=cut;
   }else{
+    /* Ken Burns fortsætter hen over snittet i stedet for at starte forfra. */
+    if(c.kb){
+      const f=ca.local/c.imgDur,k=c.kb;
+      const z=lerp(k.zs,k.ze,f),x=lerp(k.pxs||0,k.pxe||0,f),y=lerp(k.pys||0,k.pye||0,f);
+      c2.kb={...k,zs:z,pxs:x,pys:y};c.kb={...k,ze:z,pxe:x,pye:y};
+    }
     c2.imgDur=c.imgDur-ca.local;c.imgDur=ca.local;c.out=c.imgDur;c2.out=c2.imgDur;
   }
   c.fadeOut=0;c2.fadeIn=0;
@@ -1392,7 +1413,9 @@ function num(parent,label,obj,key,min,max,step,opt){
   opt=opt||{};
   const r=row(label),i=el('input');
   i.type='number';i.min=min;i.max=max;i.step=step;i.value=Math.round(obj[key]*100)/100;
-  i.onchange=()=>{obj[key]=clamp(+i.value||0,min,max);i.value=Math.round(obj[key]*100)/100;markDirty(label);invalidate();if(opt.tl)renderTL();if(opt.cb)opt.cb()};
+  /* cb (fx Ind/Ud-grænserne) kører FØR tidslinjen tegnes og feltet opdateres,
+     så en negativ kliplængde aldrig vises. */
+  i.onchange=()=>{obj[key]=clamp(+i.value||0,min,max);if(opt.cb)opt.cb();i.value=Math.round(obj[key]*100)/100;markDirty(label);invalidate();if(opt.tl)renderTL()};
   r.appendChild(i);if(opt.suffix)r.appendChild(el('span','val',opt.suffix));
   parent.appendChild(r);return i;
 }
@@ -1450,10 +1473,14 @@ function inspClip(B,c){
     const s3=sec(B,'Ken Burns (zoom/pan)');
     rng(s3,'Zoom start',c.kb,'zs',1,2.2,0.01,{fmt:x=>x+'×'});
     rng(s3,'Zoom slut',c.kb,'ze',1,2.2,0.01,{fmt:x=>x+'×'});
-    rng(s3,'Pan vandret',c.kb,'px',-1,1,0.05);
-    rng(s3,'Pan lodret',c.kb,'py',-1,1,0.05);
+    /* Pan-sliderne viser panoreringens udsving; midtpunktet (som et delt
+       klip har) bevares når de flyttes. */
+    const panAx=(a,b)=>({get v(){return +((c.kb[a]-c.kb[b])/2).toFixed(2)},set v(x){const m=(c.kb[a]+c.kb[b])/2;c.kb[a]=clamp(m+x,-1,1);c.kb[b]=clamp(m-x,-1,1)}});
+    rng(s3,'Pan vandret',panAx('pxs','pxe'),'v',-1,1,0.05);
+    rng(s3,'Pan lodret',panAx('pys','pye'),'v',-1,1,0.05);
     const pr=el('div','presets');
-    for(const[nm,kb]of Object.entries({'Ingen':{zs:1,ze:1,px:0,py:0},'Zoom ind':{zs:1,ze:1.25,px:0,py:0},'Zoom ud':{zs:1.25,ze:1,px:0,py:0},'Pan →':{zs:1.15,ze:1.15,px:1,py:0},'Pan ←':{zs:1.15,ze:1.15,px:-1,py:0}})){
+    const P0={pxs:0,pxe:0,pys:0,pye:0};
+    for(const[nm,kb]of Object.entries({'Ingen':{zs:1,ze:1,...P0},'Zoom ind':{zs:1,ze:1.25,...P0},'Zoom ud':{zs:1.25,ze:1,...P0},'Pan →':{zs:1.15,ze:1.15,...P0,pxs:1,pxe:-1},'Pan ←':{zs:1.15,ze:1.15,...P0,pxs:-1,pxe:1}})){
       const p=asBtn(el('span','preset',nm));p.onclick=()=>{Object.assign(c.kb,kb);markDirty('Ken Burns: '+nm);invalidate();renderInsp()};pr.appendChild(p);
     }
     s3.appendChild(pr);
@@ -1676,7 +1703,9 @@ function applyProject(p,opts){
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'?'contain':'cover',
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
-      kb:kb?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),px:num(kb.px,0,-1,1),py:num(kb.py,0,-1,1)}:undefined
+      kb:kb&&typeof kb==='object'?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),
+        pxs:num(kb.pxs,num(kb.px,0,-1,1),-1,1),pxe:num(kb.pxe,-num(kb.px,0,-1,1),-1,1),
+        pys:num(kb.pys,num(kb.py,0,-1,1),-1,1),pye:num(kb.pye,-num(kb.py,0,-1,1),-1,1)}:(type==='image'?defaultKb():undefined)
     };
     if(!f){cl.missing={name:fname,size:fsize};missing.push(fname)}
     if(type==='image')cl.out=cl.imgDur;else if(cl.out<cl.in+0.05)cl.out=cl.in+0.05;
