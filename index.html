@@ -2308,6 +2308,55 @@ function stBadge(txt,ok){
   d.style.color=ok?'#8af0b8':'#ffb3ae';
   d.textContent=txt;document.title=(ok?'✅ ':'❌ ')+txt;
 }
+/* Et syntetisk 2 s videoklip med en 440 Hz-tone, bygget i browseren med de
+   samme WebCodecs + mp4-muxer som eksporten, så selvtesten også kører video-,
+   lyd- og varighedsstien (ikke kun stillbilleder). */
+async function makeSelftestToneMp4(){
+  const W=320,H=240,fps=30,dur=2,sr=48000;
+  let acodec=null;
+  for(const codec of['mp4a.40.2','opus']){
+    try{const r=await AudioEncoder.isConfigSupported({codec,sampleRate:sr,numberOfChannels:2,bitrate:128000});if(r.supported){acodec=codec;break}}catch(e){}
+  }
+  if(!acodec)throw new Error('ingen lyd-encoder til testklippet');
+  const vcfg=await pickAvc(W,H,fps,1e6);
+  if(!vcfg)throw new Error('ingen H.264-encoder til testklippet');
+  const target=new Mp4Muxer.ArrayBufferTarget();
+  const mux=new Mp4Muxer.Muxer({target,fastStart:'in-memory',firstTimestampBehavior:'offset',
+    video:{codec:'avc',width:W,height:H},audio:{codec:acodec==='opus'?'opus':'aac',sampleRate:sr,numberOfChannels:2}});
+  let err=null;
+  const ve=new VideoEncoder({output:(c,m)=>mux.addVideoChunk(c,m),error:e=>{err=e}});ve.configure(vcfg);
+  const ae=new AudioEncoder({output:(c,m)=>mux.addAudioChunk(c,m),error:e=>{err=e}});
+  ae.configure({codec:acodec,sampleRate:sr,numberOfChannels:2,bitrate:128000});
+  const cvs=document.createElement('canvas');cvs.width=W;cvs.height=H;const g=cvs.getContext('2d');
+  for(let k=0;k<fps*dur;k++){
+    g.fillStyle='#113322';g.fillRect(0,0,W,H);
+    g.fillStyle='#19e0ff';g.fillRect(20+k*4,90,60,60);
+    g.fillStyle='#fff';g.font='700 28px Arial';g.fillText('TONE '+k,10,34);
+    const fr=new VideoFrame(cvs,{timestamp:Math.round(k*1e6/fps),duration:Math.round(1e6/fps)});
+    ve.encode(fr,{keyFrame:k%fps===0});fr.close();
+  }
+  const N=sr*dur,step=4800;
+  for(let i=0;i<N;i+=step){
+    const n=Math.min(step,N-i),d=new Float32Array(n*2);
+    for(let j=0;j<n;j++){const v=0.3*Math.sin(2*Math.PI*440*(i+j)/sr);d[j]=v;d[n+j]=v}
+    ae.encode(new AudioData({format:'f32-planar',sampleRate:sr,numberOfFrames:n,numberOfChannels:2,timestamp:Math.round(i/sr*1e6),data:d}));
+  }
+  await ve.flush();await ae.flush();ve.close();ae.close();
+  if(err)throw err;
+  mux.finalize();
+  return new File([target.buffer],'selftest_tone.mp4',{type:'video/mp4',lastModified:Date.now()});
+}
+/* Varighed fra en blobs metadata (samme vej som probeVideo). */
+function blobDuration(blob){
+  return new Promise((res,rej)=>{
+    const v=document.createElement('video');v.preload='metadata';v.muted=true;
+    const u=URL.createObjectURL(blob);
+    const done=x=>{URL.revokeObjectURL(u);v.removeAttribute('src');v.load();x()};
+    v.onloadedmetadata=()=>{const d=v.duration;done(()=>res(d))};
+    v.onerror=()=>done(()=>rej(new Error('eksporten kan ikke læses som video')));
+    v.src=u;
+  });
+}
 async function selftest(){
   const log=(...a)=>console.log('[SELFTEST]',...a);
   stBadge('Selvtest kører…',true);
@@ -2320,25 +2369,49 @@ async function selftest(){
       g.fillStyle='#fff';g.font='700 90px Arial';g.textAlign='center';g.fillText(label,270,480);
       c.toBlob(b=>r(new File([b],`selftest_${label}.png`,{type:'image/png'})),'image/png');
     });
-    await addMediaFiles([await mk('#2266ff','A'),await mk('#ff6622','B')]);
-    const fs=S.files.filter(f=>f.name.startsWith('selftest_'));
-    if(fs.length<2)throw new Error('medier ikke indlæst');
-    for(const f of fs)addClipFromFile(f);
+    const files=[await mk('#2266ff','A'),await mk('#ff6622','B')];
+    let tone=null;
+    if(canMp4()&&window.AudioEncoder){tone=await makeSelftestToneMp4();files.push(tone);log('testklip med tone',tone.size,'B')}
+    await addMediaFiles(files);
+    const fA=S.files.find(f=>f.name==='selftest_A.png'),fB=S.files.find(f=>f.name==='selftest_B.png');
+    const fT=tone&&S.files.find(f=>f.name==='selftest_tone.mp4');
+    if(!fA||!fB||(tone&&(!fT||fT.err)))throw new Error('medier ikke indlæst'+(fT&&fT.err?': '+fT.err:''));
+    /* Tidslinje: billede A (1 s) · videoklip med tone (2 s) · billede B (1 s). */
+    addClipFromFile(fA);if(fT)addClipFromFile(fT);addClipFromFile(fB);
     for(const c of S.clips)if(c.type==='image'){c.imgDur=1;c.out=1}
     S.clips[0].fx.sat=1.6;S.clips[0].fadeIn=0.3;
     addTextAtPlayhead();S.texts[0].text='SELVTEST';S.texts[0].start=0;S.texts[0].dur=2;
     addSubAtPlayhead();S.subs[0].text='Undertekst-test';S.subs[0].start=0;S.subs[0].dur=2;
     renderTL();seekTo(0.5);
-    log('model ok',{clips:S.clips.length,texts:S.texts.length,subs:S.subs.length,total:totalDur()});
+    const total=totalDur(),fps=S.proj.fps;
+    log('model ok',{clips:S.clips.length,texts:S.texts.length,subs:S.subs.length,total});
     await sleep(400);
     drawFrame(0.5,ctx);
     log('drawFrame ok');
     let mp4txt='mp4: springes over (offline)';
     if(canMp4()){
       expCancelled=false;
-      const blob=await exportMP4(0.08,false,(p,t)=>{},true);
-      log('mp4 ok bytes='+blob.size);
-      mp4txt='mp4-eksport OK ('+(blob.size/1024|0)+' KB)';
+      const blob=await exportMP4(0.08,false,(p,t)=>{if(t===HIDDEN_MSG)stBadge('Selvtest venter: vinduet er skjult',true)},true);
+      if(!blob)throw new Error('eksporten gav ingen fil');
+      stBadge('Selvtest kører… kontrollerer eksporten',true);
+      /* Varighed: filen må højst afvige ét billede fra tidslinjen. */
+      const dur=await blobDuration(blob);
+      log('mp4 bytes='+blob.size,'varighed='+dur,'tidslinje='+total);
+      if(!(Math.abs(dur-total)<1/fps))throw new Error(`eksportens varighed ${dur.toFixed(3)} s ≠ tidslinjens ${total.toFixed(3)} s`);
+      let lydTxt='';
+      if(fT){
+        /* Lyd: tonen skal høres i videoklippet (1-3 s), stilhed under billederne. */
+        const ab=await new OfflineAudioContext(1,1,48000).decodeAudioData(await blob.arrayBuffer());
+        const ch=ab.getChannelData(0),sr=ab.sampleRate;
+        const rms=(a,b)=>{let q=0,n=0;for(let i=Math.floor(a*sr);i<Math.min(ch.length,Math.floor(b*sr));i++){q+=ch[i]*ch[i];n++}return Math.sqrt(q/Math.max(1,n))};
+        const inTone=rms(1.2,2.8),inImg=rms(0.1,0.9);
+        log('lyd rms: klip='+inTone.toFixed(4)+' billede='+inImg.toFixed(4)+' lydlængde='+ab.duration.toFixed(3));
+        if(!(inTone>0.05))throw new Error('eksportens lyd er stille i videoklippet (RMS '+inTone.toFixed(4)+')');
+        if(!(inImg<0.01))throw new Error('der er lyd under billedklippene (RMS '+inImg.toFixed(4)+')');
+        if(!(Math.abs(ab.duration-total)<1/fps))throw new Error(`lydsporets længde ${ab.duration.toFixed(3)} s ≠ ${total.toFixed(3)} s`);
+        lydTxt=` · lyd RMS ${inTone.toFixed(2)}`;
+      }
+      mp4txt=`mp4 ${dur.toFixed(3)} s = tidslinje ${total.toFixed(3)} s${lydTxt} (${blob.size/1024|0} KB)`;
     }
     log('DONE ✅');
     stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}`,true);
