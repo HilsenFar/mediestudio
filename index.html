@@ -199,7 +199,15 @@ input,select,textarea,button{font:inherit;color:inherit}
 #binEmpty{padding:26px 16px;color:var(--faint);text-align:center;grid-column:1/-1;line-height:1.6}
 /* Inaktiv glyf — ink-4 må gerne bruges her, men aldrig til tekst. */
 #binEmpty .big{font-size:30px;margin-bottom:10px;color:var(--gt-ink-4)}
-#binFoot{padding:6px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint)}
+#binFoot{padding:6px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--faint);display:flex;align-items:center;gap:8px;min-height:36px}
+#binCount{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#binFoot .sbtn{flex:none;padding:3px 8px;font-size:11px}
+/* Sortering + Opdater mappe. Egen række, så den ikke deler klasse med
+   filter-chipsene (deres klikhandler sætter S.filter). */
+#binBar{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:11px;color:var(--dim)}
+#binBar select{background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:2px 6px;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+#binBar select:focus{border-color:var(--acc)}
+#binBar .tbtn{padding:2px 8px;font-size:11px}
 
 /* ---------- Preview ---------- */
 #previewWrap{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--gt-void)}
@@ -412,6 +420,16 @@ textarea:focus-visible,
       <span class="chip" data-f="video" role="button" tabindex="0">Video</span>
       <span class="chip" data-f="image" role="button" tabindex="0">Foto</span>
     </div>
+    <div id="binBar">
+      <label for="binSort">Sortér</label>
+      <select id="binSort" title="Rækkefølge i biblioteket (efter filens ændringstid eller navn)">
+        <option value="old">Ældste først</option>
+        <option value="new">Nyeste først</option>
+        <option value="name">Navn</option>
+      </select>
+      <span class="grow"></span>
+      <button class="tbtn" id="btnRefreshDir" title="Hent nye filer fra den åbne mappe" style="display:none"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-refresh"></use></svg> Opdater mappe</button>
+    </div>
     <div id="binGrid">
       <div id="binEmpty">
         <div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg></div>
@@ -419,7 +437,7 @@ textarea:focus-visible,
         Du kan også trække filer direkte herind.
       </div>
     </div>
-    <div id="binFoot">0 medier</div>
+    <div id="binFoot"><span id="binCount">0 medier</span><button class="sbtn" id="btnAddAll" style="display:none"></button></div>
   </div>
 
   <div id="previewWrap">
@@ -610,7 +628,7 @@ const clipName=c=>c.missing?c.missing.name:((fileOf(c)||{}).name||'?');
 function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open('mediestudio-handles',1);r.onupgradeneeded=()=>r.result.createObjectStore('handles');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
 function idbSet(k,v){return idbOpen().then(db=>new Promise((res,rej)=>{const tx=db.transaction('handles','readwrite');tx.objectStore('handles').put(v,k);tx.oncomplete=()=>{db.close();res()};tx.onerror=()=>{db.close();rej(tx.error)}}))}
 function idbGet(k){return idbOpen().then(db=>new Promise((res,rej)=>{const rq=db.transaction('handles','readonly').objectStore('handles').get(k);rq.onsuccess=()=>{db.close();res(rq.result)};rq.onerror=()=>{db.close();rej(rq.error)}}))}
-async function importFromDirHandle(dh){
+async function importFromDirHandle(dh,opts){
   S.dirHandle=dh;
   idbSet('dirHandle',dh).catch(()=>{});
   const files=[];
@@ -618,8 +636,23 @@ async function importFromDirHandle(dh){
     if(e.kind==='file'&&!e.name.startsWith('.')&&(VID_EXT.test(e.name)||IMG_EXT.test(e.name)))
       files.push(await e.getFile());
   }
-  await addMediaFiles(files);
+  $('btnRefreshDir').style.display='inline-flex';
+  await addMediaFiles(files,opts);
 }
+/* Opdater mappe: nye filer i den åbne mappe (fx nye GenStudio-klip) kommer
+   ind uden mappevælgeren. En fil med samme navn men ny størrelse (den var
+   ved at blive skrevet sidst) erstatter sin gamle post i stedet for at
+   blive en dublet; klip der bruger den, forbliver forbundet. */
+async function refreshDir(){
+  const dh=S.dirHandle;if(!dh)return;
+  try{
+    let p=await dh.queryPermission({mode:'read'});
+    if(p!=='granted')p=await dh.requestPermission({mode:'read'});
+    if(p!=='granted'){toast('Adgang til mappen blev ikke givet','err');return}
+    await importFromDirHandle(dh,{refresh:true});
+  }catch(err){console.warn('Opdater mappe fejlede',err);toast('Kunne ikke læse mappen — åbn den igen med Åbn mappe','err')}
+}
+$('btnRefreshDir').onclick=refreshDir;
 async function openDirPicker(){
   if(window.showDirectoryPicker){
     try{
@@ -664,31 +697,49 @@ addEventListener('drop',e=>{
   if(fs.length)addMediaFiles(fs);
 });
 
-async function addMediaFiles(files){
-  files=files.filter(f=>!S.files.some(x=>x.name===f.name&&x.size===f.size));
+async function addMediaFiles(files,opts){
+  opts=opts||{};
+  /* Samme navn, ny størrelse ved Opdater mappe: erstat posten (samme id). */
+  const replaced=[];
+  if(opts.refresh){
+    for(const f of files){
+      if(S.files.some(x=>x.name===f.name&&x.size===f.size))continue;
+      const old=S.files.find(x=>x.name===f.name);
+      if(!old)continue;
+      try{URL.revokeObjectURL(old.url)}catch(e){}
+      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true});
+      for(const v of[vA,vB])if(v._fid===old.id){v._fid=null;v._cid=null}
+      replaced.push(old);
+    }
+  }
+  files=files.filter(f=>!S.files.some(x=>x.name===f.name&&(x.size===f.size||opts.refresh)));
   files.sort((a,b)=>a.name.localeCompare(b.name));
-  if(!files.length){toast('Ingen nye mediefiler fundet');return}
+  if(!files.length&&!replaced.length){toast(opts.refresh?'Ingen nye medier i mappen':'Ingen nye mediefiler fundet');return}
   const items=files.map(f=>({
     id:uid(),name:f.name,size:f.size,mtime:f.lastModified||0,file:f,url:URL.createObjectURL(f),
     type:VID_EXT.test(f.name)?'video':'image',dur:0,w:0,h:0,thumb:null,err:null,probing:true
   }));
   S.files.push(...items);
   renderBin();
-  let done=0;const N=items.length;
-  const queue=[...items];
+  let done=0;const N=items.length+replaced.length;
+  const queue=[...items,...replaced];
   const worker=async()=>{
     while(queue.length){
       const it=queue.shift();
       try{ it.type==='video'?await probeVideo(it):await probeImage(it); }
       catch(e){ it.err='Kan ikke læses'; }
       it.probing=false;done++;
-      $('binFoot').textContent=`Analyserer medier… ${done}/${N}`;
+      $('binCount').textContent=`Analyserer medier… ${done}/${N}`;
       renderBinCard(it);
     }
   };
   await Promise.all([0,1,2,3].map(worker));
+  /* Erstattede videoer kan være blevet kortere: hold klippenes Ud indenfor. */
+  for(const it of replaced)if(it.type==='video'&&it.dur>0)for(const c of S.clips)if(c.fid===it.id){c.out=Math.min(c.out,it.dur);if(c.in>c.out-0.05)c.in=Math.max(0,c.out-0.05)}
+  if(replaced.length){renderTL();invalidate()}
   renderBin();
   relinkMissing();
+  if(opts.refresh)toast(`${items.length===1?'1 nyt medie':items.length+' nye medier'}${replaced.length?` · ${replaced.length} opdateret`:''}`,'ok');
 }
 
 function probeVideo(it){
@@ -745,35 +796,73 @@ function probeImage(it){
 }
 
 /* ---------- Bibliotek (UI) ---------- */
-document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+/* Kun filter-chipsene (data-f) — en anden .chip må aldrig sætte S.filter. */
+document.querySelectorAll('#bin .chip[data-f]').forEach(ch=>ch.onclick=()=>{
+  document.querySelectorAll('#bin .chip[data-f]').forEach(c=>c.classList.remove('on'));
   ch.classList.add('on');S.filter=ch.dataset.f;renderBin();
 });
+/* Sortering efter filens ændringstid (GenStudio-klip har UUID-navne, så
+   navneorden er tilfældig; ændringstiden følger genereringen) eller navn. */
+S.binSort='old';try{const v=localStorage.getItem('mediestudio_binsort');if(v==='old'||v==='new'||v==='name')S.binSort=v}catch(e){}
+$('binSort').value=S.binSort;
+$('binSort').onchange=e=>{S.binSort=e.target.value;try{localStorage.setItem('mediestudio_binsort',S.binSort)}catch(err){}renderBin()};
+const byName=(a,b)=>a.name.localeCompare(b.name,'da',{numeric:true});
+const BIN_SORT={old:(a,b)=>(a.mtime-b.mtime)||byName(a,b),new:(a,b)=>(b.mtime-a.mtime)||byName(a,b),name:byName};
+/* Det viste udvalg i den viste rækkefølge. */
+function binList(){return S.files.filter(f=>S.filter==='all'||f.type===S.filter).sort(BIN_SORT[S.binSort]||BIN_SORT.old)}
+S.binSel=new Set();S.binAnchor=null;
 function renderBin(){
   const g=$('binGrid');g.innerHTML='';
-  const list=S.files.filter(f=>S.filter==='all'||f.type===S.filter);
+  const list=binList();
   if(!S.files.length){
     g.innerHTML=`<div id="binEmpty"><div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg></div>Klik på <b><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-folder-open"></use></svg> Åbn mappe</b> og vælg din Camera-mappe.<br><br>Du kan også trække filer direkte herind.</div>`;
   }
   for(const it of list)g.appendChild(binCard(it));
   const nv=S.files.filter(f=>f.type==='video').length;
-  $('binFoot').textContent=S.files.length?`${S.files.length} medier · ${nv} videoer · ${S.files.length-nv} fotos`:'0 medier';
+  $('binCount').textContent=S.files.length?`${S.files.length} medier · ${nv} videoer · ${S.files.length-nv} fotos`:'0 medier';
+  updateAddAll();
 }
+/* Knappen i bunden: "Læg N markerede på" ved multivalg, ellers alle viste. */
+function updateAddAll(){
+  const b=$('btnAddAll'),list=binList();
+  const sel=list.filter(f=>S.binSel.has(f.id));
+  if(sel.length>1){b.textContent=`Læg ${sel.length} markerede på`;b.title='Læg de markerede medier på tidslinjen i den viste rækkefølge';b.style.display=''}
+  else if(list.length>1){b.textContent=`Læg alle ${list.length} på`;b.title='Læg alle viste medier på tidslinjen i den viste rækkefølge';b.style.display=''}
+  else b.style.display='none';
+}
+$('btnAddAll').onclick=()=>{
+  const list=binList(),sel=list.filter(f=>S.binSel.has(f.id));
+  addClips(sel.length>1?sel:list);
+};
 function binCard(it){
   const d=document.createElement('div');
-  d.className='mcard'+(S.sel.kind==='file'&&S.sel.id===it.id?' sel':'');
+  d.className='mcard'+(S.binSel.has(it.id)&&(S.sel.kind==='file'||S.sel.kind==='files')?' sel':'');
   d.dataset.id=it.id;
   d.tabIndex=0;d.setAttribute('role','button');
+  const when=it.mtime?new Date(it.mtime).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   d.innerHTML=`
     ${it.thumb?`<img class="th" src="${it.thumb}" alt="">`:`<div class="th" style="display:flex;align-items:center;justify-content:center;color:var(--faint)">${it.probing?'…':'—'}</div>`}
     <div class="typ" title="${it.type==='video'?'Video':'Billede'}"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#${it.type==='video'?'gi-play':'gi-image'}"></use></svg></div>
     ${it.type==='video'&&it.dur?`<div class="dur">${fmtDur(it.dur)}</div>`:''}
     ${it.err?`<div class="bad"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg> ${esc(it.err)}</div>`:''}
     <button class="addBtn" title="Læg på tidslinjen" aria-label="Læg på tidslinjen"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-file-plus"></use></svg></button>
-    <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>`;
+    <div class="nm" title="${esc(it.name)}${when?' · '+esc(when):''}">${esc(it.name)}</div>`;
   d.onclick=e=>{
     if(e.target.classList.contains('addBtn')){addClipFromFile(it);return}
-    select('file',it.id);
+    /* Shift: område fra ankeret · Ctrl/Cmd: slå til/fra · ellers ét medie. */
+    if(e.shiftKey&&S.binAnchor){
+      const list=binList(),a=list.findIndex(f=>f.id===S.binAnchor),b=list.findIndex(f=>f.id===it.id);
+      if(a>=0&&b>=0){
+        if(!(e.ctrlKey||e.metaKey))S.binSel.clear();
+        for(let k=Math.min(a,b);k<=Math.max(a,b);k++)S.binSel.add(list[k].id);
+      }
+    }else if(e.ctrlKey||e.metaKey){
+      if(S.binSel.has(it.id))S.binSel.delete(it.id);else S.binSel.add(it.id);
+      S.binAnchor=it.id;
+    }else{S.binSel=new Set([it.id]);S.binAnchor=it.id}
+    if(S.binSel.size===1)select('file',[...S.binSel][0]);
+    else if(S.binSel.size>1)select('files',null);
+    else deselect();
   };
   d.ondblclick=()=>addClipFromFile(it);
   return d;
@@ -784,10 +873,12 @@ function renderBinCard(it){
 }
 
 /* ---------- Klip på tidslinjen ---------- */
-function addClipFromFile(it,atIndex){
-  if(it.err){toast('Filen kan ikke bruges: '+it.err,'err');return}
-  if(it.probing){toast('Vent — filen analyseres stadig');return}
-  if(it.type==='video'&&!(Number.isFinite(it.dur)&&it.dur>0)){toast('Videoens længde kan ikke bestemmes, så filen kan ikke bruges','err');return}
+const clipUsable=it=>!it.err&&!it.probing&&(it.type!=='video'||(Number.isFinite(it.dur)&&it.dur>0));
+function addClipFromFile(it,atIndex,opts){
+  opts=opts||{};
+  if(it.err){toast('Filen kan ikke bruges: '+it.err,'err');return null}
+  if(it.probing){toast('Vent — filen analyseres stadig');return null}
+  if(it.type==='video'&&!(Number.isFinite(it.dur)&&it.dur>0)){toast('Videoens længde kan ikke bestemmes, så filen kan ikke bruges','err');return null}
   const c=it.type==='video'
     ?{id:uid(),fid:it.id,type:'video',in:0,out:it.dur,speed:1,volume:1,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF}}
     :{id:uid(),fid:it.id,type:'image',imgDur:4,in:0,out:4,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:'cover',fx:{...FXDEF},kb:defaultKb()};
@@ -803,10 +894,23 @@ function addClipFromFile(it,atIndex){
     toast(`Klippet er ${ORIENT_TXT[orientOf(it.w,it.h)]}, projektet er ${ORIENT_TXT[orientOf(S.proj.w,S.proj.h)]} (${S.proj.w}×${S.proj.h}).`,'',
       {action:{label:'Skift til klippets format',fn:()=>{S.projManual=false;adoptProjectSize(it);if(c.fit==='blur')c.fit='cover';markDirty('format');renderInsp();invalidate()}}});
   }
+  $('stageHint').style.display='none';
+  if(opts.batch)return c;   /* addClips tegner og markerer én gang til sidst */
   select('clip',c.id);
   renderTL();markDirty('tilføj klip');
-  $('stageHint').style.display='none';
   if(S.clips.length===1)seekTo(0);
+  return c;
+}
+/* Læg flere medier på tidslinjen i den givne rækkefølge — ét fortryd-trin. */
+function addClips(items){
+  const ok=items.filter(clipUsable),skip=items.length-ok.length;
+  if(!ok.length){toast('Ingen af medierne kan bruges endnu','err');return}
+  const wasEmpty=!S.clips.length;let last=null;
+  for(const it of ok)last=addClipFromFile(it,undefined,{batch:true})||last;
+  if(last)select('clip',last.id);
+  renderTL();markDirty(`læg ${ok.length} klip på`);
+  if(wasEmpty)seekTo(0);
+  toast(`${ok.length} klip lagt på tidslinjen${skip?` · ${skip} sprunget over (fejl eller analyseres stadig)`:''}`,'ok');
 }
 /* Standardformater (højst 1920 på den lange led). Et klip i en skæv
    størrelse (AI-klip: 640×368, 832×480, 1280×736, 1920×1104) giver et
@@ -1163,7 +1267,10 @@ const tlScroll=$('tlScroll'),tlInner=$('tlInner'),ruler=$('ruler');
 function select(kind,id){
   S.sel={kind,id};
   document.querySelectorAll('.mcard.sel').forEach(x=>x.classList.remove('sel'));
-  if(kind==='file'){const el=document.querySelector(`.mcard[data-id="${id}"]`);if(el)el.classList.add('sel')}
+  if(kind==='file'&&!S.binSel.has(id)){S.binSel=new Set([id]);S.binAnchor=id}
+  if(kind!=='file'&&kind!=='files')S.binSel.clear();
+  if(kind==='file'||kind==='files')for(const fid of S.binSel){const el=document.querySelector(`.mcard[data-id="${fid}"]`);if(el)el.classList.add('sel')}
+  if(typeof updateAddAll==='function')updateAddAll();
   document.querySelectorAll('.blk.sel').forEach(x=>x.classList.remove('sel'));
   if(kind==='clip'||kind==='text'||kind==='sub'){const el=document.querySelector(`.blk[data-id="${id}"]`);if(el)el.classList.add('sel')}
   renderInsp();updateSelStatus();
@@ -1175,6 +1282,7 @@ function updateSelStatus(){
   else if(k==='text')s='Valgt: tekst';
   else if(k==='sub')s='Valgt: undertekst';
   else if(k==='file'){const f=S.files.find(x=>x.id===S.sel.id);s=f?`Valgt i bibliotek: ${f.name}`:''}
+  else if(k==='files')s=`Valgt i bibliotek: ${S.binSel.size} medier (Shift/Ctrl+klik)`;
   $('stSel').textContent=s;
 }
 const selClip=()=>S.sel.kind==='clip'?S.clips.find(c=>c.id===S.sel.id):null;
@@ -1506,6 +1614,7 @@ function renderInsp(){
   else if(tx){inspText(B,tx)}
   else if(su){inspSub(B,su)}
   else if(S.sel.kind==='file'){inspFile(B)}
+  else if(S.sel.kind==='files'){inspFiles(B)}
   else{inspProject(B)}
 }
 function inspClip(B,c){
@@ -1525,6 +1634,11 @@ function inspClip(B,c){
   rng(s1,'Fade ind',c,'fadeIn',0,5,0.1,{fmt:x=>x+'s'});
   rng(s1,'Fade ud',c,'fadeOut',0,5,0.1,{fmt:x=>x+'s'});
   selBox(s1,'Tilpasning',c,'fit',['cover|Fyld (beskær)','contain|Tilpas (bånd)','blur|Tilpas + sløret baggrund']);
+  if(S.clips.length>1){
+    const bf=el('button','sbtn','Brug denne tilpasning på alle klip');
+    bf.onclick=()=>{for(const x of S.clips)x.fit=c.fit;markDirty('tilpasning på alle klip');invalidate();toast(`Tilpasning sat på alle ${S.clips.length} klip`,'ok')};
+    const r=el('div','btnRow');r.appendChild(bf);s1.appendChild(r);
+  }
   if(c.type==='image'&&c.kb){
     const s3=sec(B,'Ken Burns (zoom/pan)');
     rng(s3,'Zoom start',c.kb,'zs',1,2.2,0.01,{fmt:x=>x+'×'});
@@ -1545,6 +1659,12 @@ function inspClip(B,c){
   const pr=el('div','presets');pr.style.marginBottom='9px';
   for(const nm of Object.keys(FXPRESETS)){const p=asBtn(el('span','preset',nm));p.onclick=()=>{c.fx={...FXPRESETS[nm]};markDirty('effekt: '+nm);invalidate();renderInsp();renderTL()};pr.appendChild(p)}
   s2.appendChild(pr);
+  if(S.clips.length>1){
+    /* Hvert klip får sin egen kopi af effekterne (ikke et delt objekt). */
+    const ba=el('button','sbtn','Anvend effekterne på alle klip');
+    ba.onclick=()=>{for(const x of S.clips)if(x!==c)x.fx={...c.fx};markDirty('effekter på alle klip');invalidate();renderTL();toast(`Effekter sat på alle ${S.clips.length} klip`,'ok')};
+    const r=el('div','btnRow');r.appendChild(ba);s2.appendChild(r);
+  }
   rng(s2,'Lysstyrke',c.fx,'bright',0,2.5,0.01);
   rng(s2,'Kontrast',c.fx,'contrast',0,2.5,0.01);
   rng(s2,'Mætning',c.fx,'sat',0,3,0.01);
@@ -1648,6 +1768,17 @@ function inspFile(B){
   const br=el('div','btnRow');br.style.marginTop='10px';
   const b=el('button','sbtn',ICO('file-plus')+' Læg på tidslinjen');b.onclick=()=>addClipFromFile(f);
   br.appendChild(b);s1.appendChild(br);
+}
+function inspFiles(B){
+  $('inspTitle').textContent='Medier';
+  const sel=binList().filter(f=>S.binSel.has(f.id));
+  const s1=sec(B,`${sel.length} medier markeret`);
+  const nv=sel.filter(f=>f.type==='video').length;
+  s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.7;margin-bottom:8px">${nv} videoer · ${sel.length-nv} billeder · ${fmtDur(sel.reduce((a,f)=>a+(f.type==='video'?(f.dur||0):4),0))} i alt.<br>Shift+klik markerer et område, Ctrl+klik slår et medie til eller fra.</div>`));
+  const br=el('div','btnRow');
+  const b=el('button','sbtn acc',ICO('file-plus')+` Læg ${sel.length} markerede på tidslinjen`);b.onclick=()=>addClips(sel);
+  const bx=el('button','sbtn','Ryd markering');bx.onclick=()=>{S.binSel.clear();deselect();renderBin()};
+  br.append(b,bx);s1.appendChild(br);
 }
 function inspProject(B){
   $('inspTitle').textContent='Projekt';
