@@ -586,15 +586,15 @@ textarea:focus-visible,
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="expTitle">
     <h2 id="expTitle">Eksportér video</h2>
     <div id="expOpts">
-      <div class="row"><label>Format</label><select id="expFmt"></select></div>
-      <div class="row"><label>Opløsning</label><select id="expRes">
+      <div class="row"><label for="expFmt">Format</label><select id="expFmt"></select></div>
+      <div class="row"><label for="expRes">Opløsning</label><select id="expRes">
         <option value="proj">Som projekt</option>
         <option value="half">Halv størrelse</option>
         <option value="1080x1920">TikTok / Reels / Shorts · 1080×1920</option>
         <option value="1920x1080">YouTube · 1920×1080</option>
         <option value="1080x1080">Kvadrat · 1080×1080</option>
       </select></div>
-      <div class="row"><label>Kvalitet</label><select id="expQ">
+      <div class="row"><label for="expQ">Kvalitet</label><select id="expQ">
         <option value="0.16">Høj</option>
         <option value="0.10" selected>Mellem</option>
         <option value="0.055">Lav</option>
@@ -726,7 +726,7 @@ async function importFromDirHandle(dh,opts){
       files.push(await e.getFile());
   }
   $('btnRefreshDir').style.display='inline-flex';
-  await addMediaFiles(files,opts);
+  await addMediaFiles(files,{...opts,dir:dh});
 }
 /* Opdater mappe: nye filer i den åbne mappe (fx nye GenStudio-klip) kommer
    ind uden mappevælgeren. En fil med samme navn men ny størrelse (den var
@@ -789,12 +789,16 @@ addEventListener('drop',e=>{
 
 async function addMediaFiles(files,opts){
   opts=opts||{};
-  /* Samme navn, ny størrelse ved Opdater mappe: erstat posten (samme id). */
+  /* Samme navn, ny størrelse ved Opdater mappe: erstat posten (samme id) —
+     men kun en post der selv kom fra den mappe (src). En fil med samme navn
+     fra en anden kilde (to kamerakort kan begge have IMG_0001.JPG) byttes
+     aldrig ud; den nye fil bliver sin egen post. */
   const replaced=[];
+  if(opts.dir)for(const f of files)for(const x of S.files)if(x.name===f.name&&x.size===f.size)x.src=opts.dir;
   if(opts.refresh){
     for(const f of files){
       if(S.files.some(x=>x.name===f.name&&x.size===f.size))continue;
-      const old=S.files.find(x=>x.name===f.name);
+      const old=S.files.find(x=>x.name===f.name&&x.src&&x.src===opts.dir);
       if(!old)continue;
       try{URL.revokeObjectURL(old.url)}catch(e){}
       Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null});
@@ -802,11 +806,11 @@ async function addMediaFiles(files,opts){
       replaced.push(old);
     }
   }
-  files=files.filter(f=>!S.files.some(x=>x.name===f.name&&(x.size===f.size||opts.refresh)));
+  files=files.filter(f=>!S.files.some(x=>x.name===f.name&&x.size===f.size));
   files.sort((a,b)=>a.name.localeCompare(b.name));
   if(!files.length&&!replaced.length){toast(opts.refresh?'Ingen nye medier i mappen':'Ingen nye mediefiler fundet');return}
   const items=files.map(f=>({
-    id:uid(),name:f.name,size:f.size,mtime:f.lastModified||0,file:f,url:URL.createObjectURL(f),
+    id:uid(),name:f.name,size:f.size,mtime:f.lastModified||0,file:f,url:URL.createObjectURL(f),src:opts.dir||null,
     type:kindOfName(f.name),dur:0,w:0,h:0,thumb:null,err:null,probing:true
   }));
   S.files.push(...items);
@@ -969,9 +973,11 @@ $('btnAddAll').onclick=()=>{
 };
 function binCard(it){
   const d=document.createElement('div');
-  d.className='mcard'+(S.binSel.has(it.id)&&(S.sel.kind==='file'||S.sel.kind==='files')?' sel':'');
+  const on=S.binSel.has(it.id)&&(S.sel.kind==='file'||S.sel.kind==='files');
+  d.className='mcard'+(on?' sel':'');
   d.dataset.id=it.id;
-  d.tabIndex=0;d.setAttribute('role','button');
+  d.tabIndex=0;d.setAttribute('role','button');d.setAttribute('aria-pressed',on?'true':'false');
+  d.setAttribute('aria-label',`${it.name}${it.type==='audio'?' (lyd)':it.type==='image'?' (billede)':' (video)'}${it.err?' — '+it.err:''}`);
   const when=it.mtime?new Date(it.mtime).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   const TYP={video:['Video','gi-play'],image:['Billede','gi-image'],audio:['Lyd','gi-music']}[it.type]||['Billede','gi-image'];
   const addTxt=it.type==='audio'?'Brug som musik':'Læg på tidslinjen';
@@ -1709,10 +1715,11 @@ $('masterVol').oninput=e=>{S.masterVol=+e.target.value};
 const tlScroll=$('tlScroll'),tlInner=$('tlInner'),ruler=$('ruler');
 function select(kind,id){
   S.sel={kind,id};
-  document.querySelectorAll('.mcard.sel').forEach(x=>x.classList.remove('sel'));
   if(kind==='file'&&!S.binSel.has(id)){S.binSel=new Set([id]);S.binAnchor=id}
   if(kind!=='file'&&kind!=='files')S.binSel.clear();
-  if(kind==='file'||kind==='files')for(const fid of S.binSel){const el=document.querySelector(`.mcard[data-id="${fid}"]`);if(el)el.classList.add('sel')}
+  /* Markeringen vises med .sel og siges med aria-pressed. */
+  const binOn=kind==='file'||kind==='files';
+  document.querySelectorAll('.mcard').forEach(x=>{const on=binOn&&S.binSel.has(x.dataset.id);x.classList.toggle('sel',on);x.setAttribute('aria-pressed',on?'true':'false')});
   if(typeof updateAddAll==='function')updateAddAll();
   document.querySelectorAll('.blk.sel').forEach(x=>x.classList.remove('sel'));
   if(kind==='clip'||kind==='text'||kind==='sub'){const el=document.querySelector(`.blk[data-id="${id}"]`);if(el)el.classList.add('sel')}
@@ -2116,13 +2123,22 @@ for(const id of['trClips','trTexts','trSubs','trMusic'])$(id).addEventListener('
    vinduet. Huskes pr. browser. */
 const TLH_MIN=292,TLH_DEF=300;
 function setTlh(h,save){
-  h=Math.round(clamp(h,TLH_MIN,Math.max(TLH_MIN,innerHeight*0.55)));
+  const max=Math.round(Math.max(TLH_MIN,innerHeight*0.55));
+  h=Math.round(clamp(h,TLH_MIN,max));
   document.body.style.setProperty('--tlh',h+'px');
+  tlhAria(h,max);
   if(save)try{localStorage.setItem('mediestudio_tlh',String(h))}catch(e){}
   drawRuler();invalidate();
   return h;
 }
-try{const v=+localStorage.getItem('mediestudio_tlh');if(v)setTlh(v)}catch(e){}
+/* Fokuserbar separator: ARIA kræver værdien (og grænserne). */
+function tlhAria(h,max){
+  const r=$('tlResize');if(!r)return;
+  r.setAttribute('aria-valuemin',String(TLH_MIN));r.setAttribute('aria-valuemax',String(max));
+  r.setAttribute('aria-valuenow',String(h));r.setAttribute('aria-valuetext',h+' px');
+}
+try{const v=+localStorage.getItem('mediestudio_tlh');if(v)setTlh(v);
+  else tlhAria(Math.round($('tl').getBoundingClientRect().height)||TLH_DEF,Math.round(Math.max(TLH_MIN,innerHeight*0.55)))}catch(e){}
 (()=>{
   const r=$('tlResize');
   r.addEventListener('pointerdown',e=>{
@@ -2246,7 +2262,15 @@ const ICO=(name,mod)=>`<svg class="gi${mod?' '+mod:''}" aria-hidden="true"><use 
 /* Klikbare spans/divs er ikke tastaturbetjenbare af sig selv. */
 const asBtn=n=>{n.tabIndex=0;n.setAttribute('role','button');return n};
 function el(tag,cls,html){const d=document.createElement(tag);if(cls)d.className=cls;if(html!=null)d.innerHTML=html;return d}
-function row(label){const r=el('div','row');const l=el('label',null,label);r.appendChild(l);return r}
+/* Rækkens <label> bindes til kontrollen (for/id), så skærmlæsere siger navnet
+   og et klik på etiketten fokuserer feltet. Kontrollen tilføjes af kalderen
+   lige efter row(), derfor sker bindingen i en mikroopgave. */
+let rowSeq=0;
+function row(label){
+  const r=el('div','row');const l=el('label',null,label);r.appendChild(l);
+  queueMicrotask(()=>{const c=r.querySelector('input,select,textarea');if(c){if(!c.id)c.id='insp-f'+(++rowSeq);l.htmlFor=c.id}});
+  return r;
+}
 function rng(parent,label,obj,key,min,max,step,opt){
   opt=opt||{};
   const r=row(label),i=el('input'),v=el('span','val');
@@ -2568,8 +2592,14 @@ function inspProject(B){
     const names=[...new Set(miss.map(c=>c.missing.name))];
     const txt=[miss.length?`${miss.length} af ${S.clips.length} klip venter på deres fil (${esc(names.slice(0,3).join(', '))}${names.length>3?' …':''}).`:'',
       mMiss?`Musikken venter på ${esc(S.music.missing.name)}.`:''].filter(Boolean).join(' ');
-    sw.appendChild(el('div',null,`<div style="font-size:12px;color:var(--gt-warn-ink);line-height:1.6;margin-bottom:8px">${ICO('warning','gi--sm')} ${txt} Åbn mappen med dem, så forbindes de automatisk.</div>`));
+    const gsOn=typeof gsReady==='function'&&gsReady();
+    sw.appendChild(el('div',null,`<div style="font-size:12px;color:var(--gt-warn-ink);line-height:1.6;margin-bottom:8px">${ICO('warning','gi--sm')} ${txt} ${gsOn?'Kommer de fra GenStudio, hentes de med Hent fra GenStudio. Ellers åbn mappen med dem, så forbindes de automatisk.':'Åbn mappen med dem, så forbindes de automatisk.'}</div>`));
     const br=el('div','btnRow');
+    if(gsOn){
+      const bg=el('button','sbtn acc',ICO('download')+' Hent fra GenStudio');
+      bg.onclick=async()=>{bg.disabled=true;const n=await gsRelink();bg.disabled=false;if(!n)toast('GenStudio har ingen af de manglende filer','err')};
+      br.appendChild(bg);
+    }
     const bo=el('button','sbtn acc',ICO('folder-open')+' Åbn mappe');bo.onclick=openDirPicker;br.appendChild(bo);
     if($('btnReopenDir').style.display!=='none'){const brd=el('button','sbtn',ICO('refresh')+' Genåbn seneste mappe');brd.onclick=()=>$('btnReopenDir').click();br.appendChild(brd)}
     if(miss.length){
@@ -2623,20 +2653,33 @@ function inspProject(B){
   s3.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);margin-bottom:8px">Gemmes automatisk i browseren. Brug ${ICO('save')} Gem for en projektfil du kan dele/flytte.</div>`));
   const br=el('div','btnRow');
   const bc=el('button','sbtn danger','Ryd tidslinjen');
-  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty('ryd tidslinjen');invalidate();$('stageHint').style.display='flex'}};
+  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){backupAutosave('før Ryd tidslinjen');S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty('ryd tidslinjen');invalidate();$('stageHint').style.display='flex'}};
   br.appendChild(bc);s3.appendChild(br);
-  /* Rullende backup: autosave lægger det gemte projekt her, før det
-     overskrives med et projekt med færre klip (og før Indlæs/Gendan). */
-  const prev=readPrevAutosave(),pn=k=>prev&&Array.isArray(prev[k])?prev[k].length:0;
-  if(prev&&(pn('clips')||pn('texts')||pn('subs')||(prev.music&&typeof prev.music==='object'))){
-    const n=Array.isArray(prev.clips)?prev.clips.length:0;
-    const when=prev.savedAt?new Date(prev.savedAt).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    const bp=el('button','sbtn',ICO('undo')+' Gendan forrige autosave');
-    bp.title='Skift til det projekt autosave gemte før det blev overskrevet med færre klip';
-    bp.onclick=restorePrevAutosave;
-    const br2=el('div','btnRow');br2.style.alignItems='center';br2.appendChild(bp);
-    br2.appendChild(el('span',null,`<span style="font-size:var(--gt-t-xs);color:var(--faint)">${n} klip${when?' · gemt '+esc(when):''}</span>`));
-    s3.appendChild(br2);
+  /* Backup: autosavens "færre klip"-kopi (LSPREV) og ringen af udskiftede
+     projekter (før Indlæs/Ryd/gendannelse, fra en anden fane). Kopier af det
+     projekt der er åbent nu, vises ikke. */
+  const curKey=projKey(serializeProject());
+  const baks=[];
+  const prev=readPrevAutosave();
+  if(projHasContent(prev))baks.push({why:'før færre klip',at:prev.savedAt,p:prev});
+  for(const e of readBackups())baks.push(e);
+  const seen=new Set([curKey]);
+  const list=baks.filter(e=>{const k=projKey(e.p);if(seen.has(k))return false;seen.add(k);return true});
+  if(list.length){
+    const sb=sec(B,'Backup');
+    sb.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);margin-bottom:6px">Projekter der er skiftet ud. Skift tilbage med ét klik; det åbne projekt gemmes selv som backup.</div>`));
+    for(const e of list){
+      const p=e.p,n=Array.isArray(p.clips)?p.clips.length:0;
+      const t=e.at||p.savedAt;
+      const when=t?new Date(t).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+      const name=typeof p.name==='string'&&p.name?p.name:'Projekt';
+      const bp=el('button','sbtn',ICO('undo')+' Skift til');
+      bp.setAttribute('aria-label',`Skift til backup: ${name}, ${n} klip, ${e.why}${when?', '+when:''}`);
+      bp.onclick=()=>restoreBackup(p);
+      const r=el('div','btnRow');r.style.alignItems='center';r.appendChild(bp);
+      r.appendChild(el('span',null,`<span style="font-size:var(--gt-t-xs);color:var(--faint)">${esc(name)} · ${n} klip · ${esc(e.why)}${when?' · '+esc(when):''}</span>`));
+      sb.appendChild(r);
+    }
   }
   if(S.subs.length||S.texts.length)inspSubShared(B);
 }
@@ -2767,34 +2810,83 @@ function readPrevAutosave(){
   try{const p=JSON.parse(localStorage.getItem(LSPREV)||'null');return p&&typeof p==='object'?p:null}catch(e){return null}
 }
 const clipCountOf=raw=>{try{const p=JSON.parse(raw);return p&&Array.isArray(p.clips)?p.clips.length:0}catch(e){return 0}};
-/* Læg det nuværende autosave over i backup-pladsen (før Indlæs/Gendan). */
-function backupAutosave(){
-  if(SELFTEST)return;
-  try{const old=localStorage.getItem(LSKEY);if(old&&clipCountOf(old))localStorage.setItem(LSPREV,old)}catch(e){}
+/* Backup-ringen (LSBAK): de sidste BAK_MAX forskellige projekter der blev
+   skiftet ud — før Indlæs, før Ryd tidslinjen, før en gendannelse, og den
+   version en anden fane havde gemt, når denne fane gemmer oven på den.
+   LSPREV er stadig autosavens egen "færre klip"-backup; ringen skrives kun
+   ved de udskiftninger, så en almindelig redigering bagefter aldrig kan
+   skubbe det udskiftede projekt ud. */
+const LSBAK='mediestudio_v1_backups',BAK_MAX=5;
+/* Denne fanes id: gemmes i autosaven, så en anden fanes skrivning kan kendes. */
+const TAB_ID=Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+const projHasContent=p=>!!(p&&typeof p==='object'&&((Array.isArray(p.clips)&&p.clips.length)||(Array.isArray(p.texts)&&p.texts.length)||(Array.isArray(p.subs)&&p.subs.length)||(p.music&&typeof p.music==='object')));
+const projKey=p=>{try{const{savedAt,tab,...rest}=p;return JSON.stringify(rest)}catch(e){return ''}};
+function readBackups(){
+  if(SELFTEST)return[];
+  try{const a=JSON.parse(localStorage.getItem(LSBAK)||'[]');return Array.isArray(a)?a.filter(e=>e&&typeof e==='object'&&projHasContent(e.p)):[]}catch(e){return[]}
 }
+function pushBackup(p,why){
+  if(SELFTEST||!projHasContent(p))return;
+  const k=projKey(p);
+  let ring=readBackups().filter(e=>projKey(e.p)!==k);
+  ring.unshift({why:String(why),at:Date.now(),p});
+  ring=ring.slice(0,BAK_MAX);
+  /* Fuld localStorage: smid de ældste, ét ad gangen. */
+  while(ring.length){try{localStorage.setItem(LSBAK,JSON.stringify(ring));return}catch(e){ring.pop()}}
+}
+/* Læg det projekt der er åbent lige nu i backup-ringen (før Indlæs/Ryd).
+   Tages fra hukommelsen, så de sidste sekunders ændringer også er med. */
+function backupAutosave(why){pushBackup(serializeProject(),why||'før Indlæs')}
 /* Autosave skriver kun når noget er ændret (S.dirty), og en skrivning med
    færre klip end det gemte lægger først det gemte over i LSPREV. Så kan en
-   tom opstart, en genindlæsning eller et fejlklik aldrig æde et projekt. */
+   tom opstart, en genindlæsning eller et fejlklik aldrig æde et projekt.
+   Har en anden fane gemt siden, lægges dens version i backup-ringen først. */
 function writeAutosave(){
   S.dirty=false;
   if(SELFTEST)return;
   try{
-    const next=JSON.stringify(serializeProject());
+    const cur=serializeProject();cur.tab=TAB_ID;
     const old=localStorage.getItem(LSKEY);
-    if(old&&clipCountOf(old)>S.clips.length)localStorage.setItem(LSPREV,old);
-    localStorage.setItem(LSKEY,next);
+    if(old){
+      let op=null;try{op=JSON.parse(old)}catch(e){}
+      if(op&&op.tab&&op.tab!==TAB_ID&&FOREIGN_TABS.has(op.tab)&&projKey(op)!==projKey(cur))pushBackup(op,'fra en anden fane');
+      else if(clipCountOf(old)>S.clips.length)localStorage.setItem(LSPREV,old);
+    }
+    localStorage.setItem(LSKEY,JSON.stringify(cur));
   }catch(e){console.warn('Autosave fejlede',e)}
 }
-function restorePrevAutosave(){
-  const p=readPrevAutosave();if(!p)return;
-  if(!confirm('Erstat det nuværende projekt med forrige autosave?\n\nDet nuværende projekt lægges i stedet som "forrige autosave", så du kan skifte tilbage.'))return;
-  const cur=JSON.stringify(serializeProject());
+/* Skift til en backup (LSPREV eller en post i ringen). Det nuværende projekt
+   lægges selv i ringen først, og autosaven skrives direkte bagefter (uden
+   "færre klip"-rotationen, der ellers ville lægge en op til 3 s gammel kopi
+   over i LSPREV). */
+function restoreBackup(p){
+  if(!projHasContent(p))return;
+  if(!confirm('Skift til denne backup?\n\nDet projekt der er åbent nu, lægges selv i backup, så du kan skifte tilbage.'))return;
+  pushBackup(serializeProject(),'før gendannelse');
   applyProject(p,{quiet:true});
-  try{localStorage.setItem(LSPREV,cur)}catch(e){}
-  writeAutosave();
+  S.dirty=false;
+  try{const cur=serializeProject();cur.tab=TAB_ID;localStorage.setItem(LSKEY,JSON.stringify(cur))}catch(e){}
   if(typeof histReset==='function')histReset();
-  toast('Forrige autosave gendannet ✓','ok');
+  if(typeof gsRelink==='function')gsRelink();
+  renderInsp();
+  toast('Backup gendannet ✓','ok');
 }
+/* En anden MedieStudio-fane har gemt: sig det én gang. Denne fane gemmer
+   stadig sine egne ændringer, men den anden fanes version lægges i backup
+   før den overskrives (writeAutosave). Kun faner der er set skrive mens
+   denne fane var åben, tæller: en genindlæsning (nyt TAB_ID) eller gårsdagens
+   session er det samme projekt, der fortsætter. */
+const FOREIGN_TABS=new Set();
+let otherTabWarned=false;
+addEventListener('storage',e=>{
+  if(e.key!==LSKEY||!e.newValue||SELFTEST)return;
+  let p=null;try{p=JSON.parse(e.newValue)}catch(err){}
+  if(!p||!p.tab||p.tab===TAB_ID)return;
+  FOREIGN_TABS.add(p.tab);
+  if(otherTabWarned)return;
+  otherTabWarned=true;
+  toast('MedieStudio er også åben i en anden fane. Redigér i én fane ad gangen; den andens seneste version gemmes under Projekt → Backup.','',{ms:9000});
+});
 /* ================================================================
    FORTRYD / GENTAG — snapshot-historik
    Et trin er et JSON-snapshot af alt redigerbart (ingen medier: fid'er er
@@ -2884,7 +2976,8 @@ $('btnLoadProj').onclick=()=>$('projInput').click();
 $('projInput').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
   try{const p=JSON.parse(await f.text());if(!p||typeof p!=='object')throw new Error('ugyldig');
-    backupAutosave();const nm=applyProject(p);S.dirty=true;if(typeof histReset==='function')histReset();
+    backupAutosave('før Indlæs');const nm=applyProject(p);S.dirty=true;if(typeof histReset==='function')histReset();
+    if(nm&&typeof gsRelink==='function')gsRelink();
     if(!nm)toast('Projekt indlæst ✓','ok')}
   catch(err){toast('Ugyldig projektfil','err')}
   e.target.value='';
@@ -2993,7 +3086,9 @@ document.addEventListener('keydown',e=>{
      så stadig afspille/pause (den globale genvej); Enter vælger dem. */
   if(e.key===' '&&t.matches('.mcard,.blk'))return;
   e.preventDefault();e.stopPropagation();
-  t.click();
+  /* Skift/Ctrl følger med, så Shift+Enter og Ctrl+Enter markerer flere
+     medie-kort ligesom Shift-/Ctrl-klik (t.click() sender ingen taster). */
+  t.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window,shiftKey:e.shiftKey,ctrlKey:e.ctrlKey,metaKey:e.metaKey,altKey:e.altKey}));
 });
 </script>
 <script>
@@ -3492,7 +3587,7 @@ function gsRender(){
   if(GS.io)GS.io.disconnect();
   L.innerHTML='';
   const items=gsItems().filter(x=>!fav||x.job.favorite);
-  const have=new Set(S.files.map(f=>f.name));
+  const have=new Set(S.files.map(f=>f.name)),need=gsMissingNames();
   if(!items.length){L.innerHTML=`<div id="gsEmpty">${fav?'Ingen færdige favoritter i GenStudio.':'Ingen færdige resultater i GenStudio endnu.'}</div>`}
   /* Videoer får et forhåndsbillede først når rækken ruller ind i synsfeltet. */
   GS.io='IntersectionObserver' in window?new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const v=e.target;GS.io.unobserve(v);v.preload='metadata';v.src=v.dataset.src}},{root:L}):null;
@@ -3507,8 +3602,10 @@ function gsRender(){
     const when=x.t?new Date(x.t).toLocaleString('da-DK',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
     const kindTxt={video:'Video',image:'Billede',audio:'Lyd'}[x.kind];
     row.innerHTML=`<input type="checkbox">${th}<span class="gsTx"><span class="p">${esc(x.job.prompt||x.job.modelLabel||x.out.file)}</span>
-      <span class="meta">${x.job.favorite?ICO('star','gi--sm'):''}${esc(kindTxt)} · ${esc(x.job.modelLabel||x.job.model||'')}${when?' · '+esc(when):''}${have.has(x.name)?' · i biblioteket':''}</span></span>`;
-    const cb=row.querySelector('input');cb._item=x;cb.setAttribute('aria-label',`${kindTxt}: ${(x.job.prompt||x.out.file).slice(0,80)}`);
+      <span class="meta">${x.job.favorite?ICO('star','gi--sm'):''}${esc(kindTxt)} · ${esc(x.job.modelLabel||x.job.model||'')}${when?' · '+esc(when):''}${have.has(x.name)?' · i biblioteket':need.has(x.name)?' · <b style="color:var(--gt-warn-ink)">projektet mangler den</b>':''}</span></span>`;
+    const cb=row.querySelector('input');cb._item=x;cb.setAttribute('aria-label',`${kindTxt}: ${(x.job.prompt||x.out.file).slice(0,80)}${need.has(x.name)&&!have.has(x.name)?' (projektet mangler den)':''}`);
+    /* Filer som projektets pladsholdere venter på, er valgt på forhånd. */
+    if(need.has(x.name)&&!have.has(x.name))cb.checked=true;
     cb.onchange=gsUpdate;
     L.appendChild(row);
     const v=row.querySelector('video');if(v){if(GS.io)GS.io.observe(v);else{v.preload='metadata';v.src=v.dataset.src}}
@@ -3567,12 +3664,16 @@ $('gsGo').onclick=async()=>{
    læg den på tidslinjen (lyd: som musik) hvis der ikke er noget i forvejen —
    ellers kun i biblioteket med en besked. Parameteren fjernes bagefter, så
    en genindlæsning ikke henter filen igen. */
-async function gsAutoImport(file){
-  try{
+async function gsAutoImport(file,opts){
+  opts=opts||{};
+  if(!opts.handoff)try{
     const u=new URL(location.href);u.searchParams.delete('genstudio');
     history.replaceState(history.state,'',u.pathname+u.search+u.hash);
   }catch(e){}
   if(!isMediaName(file)){toast('GenStudio-filen er ikke en video, et billede eller en lyd: '+file,'err');return}
+  /* Sendt fra GenStudio til en fane der har været åben længe: resultatet er
+     nyere end fanens jobliste. */
+  if(opts.handoff)try{GS.jobs=await gsFetchJobs()}catch(e){}
   let it=gsItems().find(x=>x.out.file===file);
   /* Ikke i joblisten (fx slettet siden): filens eget navn. */
   if(!it)it={job:{id:file},out:{file,kind:kindOfName(file)},idx:0,name:file.replace(/[^\w.-]+/g,'-'),kind:kindOfName(file),t:Date.now()};
@@ -3592,8 +3693,65 @@ async function gsDetect(){
   if(!GS_LOCAL)return;
   try{GS.jobs=await gsFetchJobs();GS.ok=true}catch(e){return}
   $('btnGenStudio').style.display='inline-flex';
+  if(SELFTEST)return;
+  gsListen();
+  if(!S.sel.kind)renderInsp();   /* projektets "mangler"-tekst peger nu på GenStudio */
+  await gsRelink(false);
   const want=new URLSearchParams(location.search).get('genstudio');
-  if(want&&!SELFTEST)await gsAutoImport(want);
+  if(want)await gsAutoImport(want);
+}
+function gsReady(){return GS.ok}
+/* Navne som projektets pladsholdere (klip og musik) venter på. */
+function gsMissingNames(){
+  const s=new Set();
+  for(const c of S.clips)if(c.missing)s.add(c.missing.name);
+  if(S.music&&S.music.missing)s.add(S.music.missing.name);
+  return s;
+}
+/* GenStudio-resultater får et læsbart navn her (gsFileName), mens GenStudio
+   selv gemmer dem som <jobId>-<n>.<ext>. Et gemt projekt med GenStudio-klip
+   kan derfor aldrig genforbindes via Åbn mappe; i stedet hentes de filer
+   pladsholderne venter på, direkte fra GenStudio (relinkMissing matcher så
+   på navn + størrelse). Kaldes når GenStudio er fundet, og efter Indlæs og
+   gendannelse af en backup. */
+let gsRelinking=false;
+async function gsRelink(refetch){
+  if(!GS.ok||gsRelinking||SELFTEST)return 0;
+  const want=gsMissingNames();if(!want.size)return 0;
+  gsRelinking=true;
+  try{
+    if(refetch!==false)try{GS.jobs=await gsFetchJobs()}catch(e){return 0}
+    const seen=new Set(),items=gsItems().filter(x=>want.has(x.name)&&!seen.has(x.name)&&seen.add(x.name));
+    if(!items.length)return 0;
+    const files=[];
+    for(const x of items){try{files.push(await gsFile(x))}catch(e){console.warn('GenStudio-hentning fejlede',e)}}
+    if(files.length)await addMediaFiles(files);
+    return files.length;
+  }finally{gsRelinking=false}
+}
+/* Én MedieStudio-fane ad gangen: GenStudios "MedieStudio"-knap spørger på
+   kanalen, om en fane allerede er åben (samme origin). Svarer denne fane,
+   sendes resultatet hertil, i stedet for at en ny fane gendanner projektet
+   uden medier og gemmer oven i denne fanes autosave. */
+let gsLastActive=Date.now(),gsChan=null;
+function gsListen(){
+  if(gsChan||GS_BRIDGE||!('BroadcastChannel' in window))return;
+  gsChan=new BroadcastChannel('mediestudio');
+  for(const ev of['pointerdown','keydown','focus'])addEventListener(ev,()=>{gsLastActive=Date.now()},true);
+  gsChan.onmessage=e=>{
+    const d=e.data;if(!d||typeof d!=='object'||typeof d.ask!=='string')return;
+    if(d.t==='ping')gsChan.postMessage({t:'pong',ask:d.ask,id:TAB_ID,at:gsLastActive});
+    else if(d.t==='open'&&d.to===TAB_ID&&typeof d.file==='string'){
+      gsChan.postMessage({t:'ok',ask:d.ask,id:TAB_ID});
+      gsAutoImport(d.file,{handoff:true});
+      /* Fanen kan ikke hente sig selv frem; titlen viser at der er nyt. */
+      if(document.hidden&&!document.title.startsWith('● ')){
+        document.title='● '+document.title;
+        const back=()=>{if(!document.hidden){document.title=document.title.replace(/^● /,'');document.removeEventListener('visibilitychange',back)}};
+        document.addEventListener('visibilitychange',back);
+      }
+    }
+  };
 }
 </script>
 <script>

@@ -62,9 +62,14 @@ self.addEventListener('fetch', e => {
       fetch(new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }))
         .then(res => {
           clearTimeout(slow);
-          if (res.ok && new URL(req.url).origin === location.origin) {
-            const copy = res.clone();
-            caches.open(VERSION).then(c => c.put('./index.html', copy));
+          /* Kun selve appen gemmes (roden eller index.html, som HTML), og under
+             begge navne: './' er manifestets start_url og matches først offline.
+             En anden navigation (fx licensfilen) må aldrig ende som app-skallen. */
+          const u = new URL(req.url), root = new URL(self.registration.scope).pathname;
+          if (res.ok && u.origin === location.origin && (u.pathname === root || u.pathname === root + 'index.html') &&
+              /text\/html/i.test(res.headers.get('content-type') || '')) {
+            const a = res.clone(), b = res.clone();
+            caches.open(VERSION).then(c => Promise.all([c.put('./', a), c.put('./index.html', b)]));
           }
           finish(res);
         })
