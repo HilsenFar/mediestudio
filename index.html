@@ -1222,7 +1222,8 @@ function drawFrame(t,c2,opts){
       const d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
       const fitIn=c.fit==='contain'||c.fit==='blur';
       let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
-      const bump=cutFxScale(c,ca.local)*pulseScale(t);
+      /* Klipskift-effekten hører til skiftet ind i klippet; første klip har intet. */
+      const bump=(ca.i>0?cutFxScale(c,ca.local):1)*pulseScale(t);
       /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
       if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fadeGain(c,ca.local),hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
       let ox=0,oy=0;
@@ -1241,7 +1242,7 @@ function drawFrame(t,c2,opts){
       c2.restore();
     }
   }
-  if(ca&&ca.c)drawCutFx(c2,ca.c,ca.local,W,H);
+  if(ca&&ca.c&&ca.i>0)drawCutFx(c2,ca.c,ca.local,W,H);
   /* Tekst-overlays */
   for(const tx of S.texts){
     if(t<tx.start||t>tx.start+tx.dur)continue;
@@ -1304,6 +1305,7 @@ const vA=document.createElement('video'),vB=document.createElement('video');
    preview-lyden over i Web Audio. */
 for(const v of[vA,vB]){v.preload='auto';v.crossOrigin='anonymous';v.playsInline=true;v._fid=null;v.preservesPitch=false;v.webkitPreservesPitch=false}
 let webmCtx=null;   /* sat under WebM-eksport i anden størrelse end projektet */
+let webmRec=false;  /* WebM-optagelse kører (musik-uret følger render-tiden) */
 let vActive=vA,vNext=vB,curIdx=-1,lastWall=0,needsDraw=true,seekBusy=false,seekPend=null,seekGuard=null;
 function invalidate(){needsDraw=true}
 function vidElFor(c){return vActive._cid===c.id?vActive:(vNext._cid===c.id?vNext:vActive)}
@@ -1347,9 +1349,19 @@ function preloadNext(i){
 async function startClip(i,local){
   curIdx=i;const c=S.clips[i];if(!c)return;
   if(isVid(c)){
-    if(vNext._cid===c.id){const t=vActive;vActive=vNext;vNext=t}
+    let pre=false;
+    if(vNext._cid===c.id){const t=vActive;vActive=vNext;vNext=t;pre=true}
     vNext.pause();
-    prepEl(vActive,c,local);
+    /* Det forudindlæste element står allerede på klippets start. Med musik-
+       uret er S.t typisk et par billeder forbi klipskiftet; et nyt
+       currentTime dér ville starte en rigtig søgning midt i en GOP (sort
+       billede, 0,1-3 s forsinkelse). Forskellen tages i stedet af
+       hastighedsjusteringen i musicTick. */
+    const it=fileOf(c);
+    if(pre&&it&&vActive._fid===it.id&&(local||0)*c.speed<0.25&&Math.abs(vActive.currentTime-c.in)<0.05){
+      vActive._cid=c.id;vActive.playbackRate=clamp(c.speed,0.0625,16);
+    }else prepEl(vActive,c,local);
+    vActive._corr=null;
     vActive.muted=false;
     applyClipVolume(c,local);
     try{await vActive.play()}catch(e){}
@@ -1448,16 +1460,24 @@ function setMusicFromFile(it){
   const old=S.music;
   /* En ny sang får nyt ind-punkt og intet beat-grid; placering, lydstyrke og fades bevares. */
   S.music={fid:it.id,start:old?old.start:0,in:0,volume:old?old.volume:1,fadeIn:old?old.fadeIn:0,fadeOut:old?old.fadeOut:0,fileDur:it.dur,grid:null,pulse:0};
-  for(const f of S.files)if(f.type==='audio'&&f.id!==it.id)f.abuf=null;
+  freeMusicBufs();
   if(S.playing)pause();
   ensureMusicBuf();
   select('music',null);renderTL();renderBin();markDirty(old?'skift musik':'tilføj musik');
   toast(`Musik: ${it.name}`,'ok');
 }
+/* Afkodede lydfiler fylder ~90 MB for 4 min stereo: kun musikken (og evt.
+   keepId, fx sangen der lige er fjernet, så fortryd er hurtig) beholdes. */
+function freeMusicBufs(keepId){
+  const cur=S.music&&S.music.fid;
+  for(const f of S.files)if(f.type==='audio'&&f.id!==cur&&f.id!==keepId){f.abuf=null;f.abufP=null}
+}
 function removeMusic(){
   if(!S.music)return;
   if(S.playing)pause();
+  const gone=S.music.fid;
   S.music=null;
+  freeMusicBufs(gone);
   if(S.sel.kind==='music')deselect();
   renderTL();renderBin();markDirty('fjern musik');invalidate();
 }
@@ -1545,7 +1565,7 @@ function gridFromKickgrid(j){
   const hasAnchor=!!r||Number.isFinite(+j.grid_anchor_s);
   const anchor=r?+r.grid_anchor_s:(hasAnchor?+j.grid_anchor_s:0);
   const novelty=(Array.isArray(j.novelty_boundaries_s)?j.novelty_boundaries_s:[]).map(x=>typeof x==='number'?x:x&&+x.t).filter(v=>Number.isFinite(v)&&v>=0).slice(0,500);
-  return{grid:{bpm,anchor:Math.max(0,anchor),src:'kickgrid',bar:4,novelty},hasAnchor,file:typeof j.file==='string'?j.file:''};
+  return{grid:{bpm,anchor:Number.isFinite(anchor)?anchor:0,src:'kickgrid',bar:4,novelty},hasAnchor,file:typeof j.file==='string'?j.file:''};
 }
 async function estimateMusicGrid(){
   const m=S.music;if(!m||m.missing){toast('Musikken mangler sin fil','err');return}
@@ -1591,7 +1611,10 @@ function cutOnBeats(n){
   for(const c of S.clips){
     const it=fileOf(c);
     const avail=c.type==='video'?(it&&it.dur>0?(it.dur-c.in)/c.speed:(c.out-c.in)/c.speed):Infinity;
-    let e=cutAfter(t+step*0.5+1e-6);   /* uafgjort (efter et kort klip): det længste */
+    /* uafgjort (efter et kort klip): det længste. Billeder får mindst 0,2 s
+       (samme gulv som trim og projektfilen), ellers flytter en genindlæsning
+       alle senere skift væk fra slaget. */
+    let e=cutAfter(t+Math.max(step*0.5,c.type==='image'?0.2:0)+1e-6);
     if(e-t>avail+1e-6){
       const e2=beatAtOrBefore(t+avail);
       if(e2-t>=T*0.5-1e-6){e=e2;nShort++;BEAT_MARK.set(c.id,'kort')}
@@ -1642,8 +1665,15 @@ let musRestartT=0;
 function musicChanged(){clearTimeout(musRestartT);if(S.playing)musRestartT=setTimeout(()=>{if(S.playing)musicStart()},150)}
 /* Ét billede med musik-uret: S.t fra lyden, klipskift fra S.t, videoen
    holdes på S.t (hastighed ±25 % under 0,3 s afvigelse, ellers spring). */
+let SEEK_LAT=0.15,WEBM_LAT=0;
 function musicTick(){
-  const tot=totalDur(),now=acNow(audioGraph.ac);
+  /* Under WebM-optagelse følger uret render-tiden (det MediaStreamDestination
+     optager), ellers udgangstiden (det der høres): ellers ligger musikken i
+     filen udgangs-latensen (60-150 ms, mere med Bluetooth) foran billedet.
+     currentTime springer i blokke, så render-tiden tages som det jævne
+     udgangsur plus en udglattet latens. */
+  const ac=audioGraph.ac,tot=totalDur();let now=acNow(ac);
+  if(webmRec){const d=ac.currentTime-now;WEBM_LAT=WEBM_LAT?WEBM_LAT*0.95+d*0.05:d;now+=WEBM_LAT}
   /* Før lyden er nået ud (første afspilning åbner lydenheden, det kan tage
      et øjeblik) står uret stille — og billedet venter på det. */
   const waiting=now<MUS.ctx0;
@@ -1658,7 +1688,18 @@ function musicTick(){
   if(el.paused&&!el.ended&&!el._playReq){el._playReq=true;el.play().catch(()=>{}).finally(()=>{el._playReq=false})}
   if(el.seeking||el.readyState<2)return;
   const want=c.in+ca.local*c.speed,dr=el.currentTime-want;
-  if(Math.abs(dr)>0.3){try{el.currentTime=Math.max(0,want+0.03)}catch(e){}return}
+  /* Søgningens varighed måles (glidende gennemsnit), og en rettelse sigter
+     så langt frem, så den ikke lander forældet og udløser en ny søgning i
+     det uendelige (lange GOP'er, 4K: 1,5-4 s pr. søgning). Højst tre
+     rettelser pr. klip; derefter tager hastighedsjusteringen resten. */
+  const cr=el._corr;
+  if(cr&&cr.pending){cr.pending=false;SEEK_LAT=clamp(SEEK_LAT*0.5+(performance.now()-cr.at)/2000,0.05,4)}
+  if(Math.abs(dr)>0.3&&!(cr&&cr.n>=3)){
+    el._corr={n:(cr?cr.n:0)+1,at:performance.now(),pending:true};
+    const aim=want+(SEEK_LAT+0.03)*c.speed;
+    try{el.currentTime=clamp(aim,0,Math.max(0,c.out-0.05))}catch(e){}
+    return;
+  }
   const r=Math.abs(dr)<0.012?c.speed:clamp(c.speed*(1-clamp(dr*2.5,-0.25,0.25)),0.0625,16);
   if(Math.abs(el.playbackRate-r)>0.004)el.playbackRate=r;
 }
@@ -1684,10 +1725,26 @@ function tick(now){
   }
   if(needsDraw){
     needsDraw=S.playing;
-    drawFrame(S.t,ctx);
-    if(webmCtx)drawFrame(S.t,webmCtx);
+    if(!holdPreview()){
+      drawFrame(S.t,ctx);
+      if(webmCtx)drawFrame(S.t,webmCtx);
+    }
     updateTimeUI();
   }
+}
+/* Under afspilning: står klippets videoelement midt i en søgning (eller har
+   intet billede endnu), beholdes forrige billede på lærredet i stedet for at
+   male baggrunden (sort blink ved klipskift). Højst 1 s, så en fil der
+   aldrig bliver klar, stadig ses som tom. */
+let holdSince=0;
+function holdPreview(){
+  if(!S.playing)return false;
+  const ca=clipAt(S.t);
+  if(!ca||!isVid(ca.c)||ca.c.missing){holdSince=0;return false}
+  const el=vidElFor(ca.c);
+  if(el._cid===ca.c.id&&!el.seeking&&el.readyState>=2){holdSince=0;return false}
+  const now=performance.now();if(!holdSince)holdSince=now;
+  return now-holdSince<1000;
 }
 function updateTimeUI(){
   $('tcur').textContent=fmtT(S.t);
@@ -2352,7 +2409,8 @@ function inspClip(B,c){
   selBox(sx,'Ved start',c,'cutFx',['|Ingen',...Object.entries(CUT_FX).map(([k,v])=>`${k}|${v}`)],v=>{if(!v)delete c.cutFx;renderTL()});
   if(S.clips.length>1){
     const bx=el('button','sbtn','Brug dette klipskift på alle klip');
-    bx.onclick=()=>{for(const x of S.clips){if(c.cutFx)x.cutFx=c.cutFx;else delete x.cutFx}markDirty('klipskift på alle klip');invalidate();renderTL();toast(`${c.cutFx?CUT_FX[c.cutFx]:'Intet klipskift'} på alle ${S.clips.length} klip`,'ok')};
+    /* Første klip har intet skift ind i sig og springes over. */
+    bx.onclick=()=>{S.clips.forEach((x,k)=>{if(c.cutFx&&k>0)x.cutFx=c.cutFx;else delete x.cutFx});markDirty('klipskift på alle klip');invalidate();renderTL();toast(`${c.cutFx?CUT_FX[c.cutFx]:'Intet klipskift'} på alle ${Math.max(0,S.clips.length-1)} klipskift`,'ok')};
     const r=el('div','btnRow');r.appendChild(bx);sx.appendChild(r);
   }
   if(c.type==='image'&&c.kb){
@@ -2516,9 +2574,12 @@ function inspGrid(B,m){
   x2.onclick=()=>{g.bpm=clamp(g.bpm*2,20,400);renderTL();renderInsp();markDirty('BPM ×2');invalidate()};
   d2.onclick=()=>{g.bpm=clamp(g.bpm/2,20,400);renderTL();renderInsp();markDirty('BPM ÷2');invalidate()};
   r1.append(x2,d2);s.appendChild(r1);
-  num(s,'Første slag (s)',g,'anchor',0,1e5,0.001,{tl:1});
+  /* Ankeret må gerne være negativt (musikkens første takt før 0 s): gitteret
+     regnes lineært, og et loft ved 0 gjorde det umuligt at skubbe tidligere. */
+  const barT=60/g.bpm*(g.bar||4);
+  num(s,'Første slag (s)',g,'anchor',-barT,1e5,0.001,{tl:1});
   const r2=el('div','btnRow');
-  const nudge=d=>{g.anchor=Math.max(0,g.anchor+d/S.proj.fps);renderTL();renderInsp();markDirty('skub beat-grid');invalidate()};
+  const nudge=d=>{g.anchor=Math.max(-barT,g.anchor+d/S.proj.fps);renderTL();renderInsp();markDirty('skub beat-grid');invalidate()};
   const nl=el('button','sbtn',ICO('chevron-left')+' 1 billede');nl.title='Skub gridet ét billede tidligere';nl.onclick=()=>nudge(-1);
   const nr=el('button','sbtn','1 billede '+ICO('chevron-right'));nr.title='Skub gridet ét billede senere';nr.onclick=()=>nudge(1);
   const ni=el('button','sbtn','Ind-punkt på slag');ni.title='Flyt musikkens ind-punkt til nærmeste slag, så sangen starter på et slag';
@@ -2771,6 +2832,7 @@ function applyProject(p,opts){
   if(S.playing)pause();
   S.music=parseMusic(p.music,num);
   if(S.music&&S.music.missing)missing.push(S.music.missing.name);
+  freeMusicBufs();
   ensureMusicBuf();
   applyProjSize();renderTL();invalidate();deselect();
   $('stageHint').style.display=S.clips.length?'none':'flex';
@@ -2915,12 +2977,13 @@ function histCommit(){
 /* Et planlagt trin lægges i historikken med det samme (før fortryd). */
 function histFlush(){if(HIST.timer){clearTimeout(HIST.timer);const pd=ptrDown;ptrDown=false;histCommit();ptrDown=pd}}
 function restoreSnap(s){
-  const o=JSON.parse(s);
+  const o=JSON.parse(s),prevMusicFid=S.music&&S.music.fid;
   S.clips=o.clips;S.texts=o.texts;S.subs=o.subs;
   Object.assign(S.subStyle,o.subStyle);Object.assign(S.proj,o.proj);
   S.projManual=!!o.projManual;S.music=o.music==null?null:o.music;
   if(S.sel.kind==='music'&&!S.music)S.sel={kind:null,id:null};
   relinkMissing({silent:true});   /* filer importeret siden trinnet blev taget */
+  freeMusicBufs(prevMusicFid);
   applyProjSize();renderTL();renderInsp();renderBin();
   $('stageHint').style.display=S.clips.length?'none':'flex';
   seekTo(clamp(S.t,0,totalDur()));
@@ -3156,7 +3219,10 @@ $('expGo').onclick=async()=>{
     const blob=fmt==='mp4'?await exportMP4(q,size,setProg):await exportWebM(q,setProg,size);
     if(blob&&!expCancelled){
       const ext=fmt==='mp4'?'.mp4':'.webm';
-      await saveBlob(blob,($('projName').value||'video')+ext,[{description:'Video',accept:{[fmt==='mp4'?'video/mp4':'video/webm']:[ext]}}]);
+      const saved=await saveBlob(blob,($('projName').value||'video')+ext,[{description:'Video',accept:{[fmt==='mp4'?'video/mp4':'video/webm']:[ext]}}]);
+      /* Huller der ikke kunne tages om (maskinen var for travl): sig det. */
+      const un=fmt==='mp4'&&lastExportStats?lastExportStats.unfixed:0;
+      if(saved&&un)toast(`Gemt, men ${un} ${un===1?'kildebillede':'kildebilleder'} blev sprunget over, så et billede kan stå lidt for længe. Luk tunge programmer og eksportér igen for et perfekt resultat.`,'err',{ms:10000});
     }else if(expCancelled)toast('Eksport annulleret');
   }catch(err){
     console.error('Eksport fejlede:',err);
@@ -3250,7 +3316,11 @@ async function buildMasterAudio(total){
   return await oc.startRendering();
 }
 /* Fastholdt kildebillede til MP4-eksportens mellembilleder (se nedenfor). */
-const HELD=document.createElement('canvas'),HELDX=HELD.getContext('2d');
+/* To buffere: det nyeste kildebillede fanges i NEXT allerede øverst i
+   onFrame (før tikkene tegnes, ellers når videoen at gå videre imens), og
+   byttes over i HELD når tikkene før det er skrevet. */
+let HELD=document.createElement('canvas'),HELDX=HELD.getContext('2d');
+let NEXT=document.createElement('canvas'),NEXTX=NEXT.getContext('2d');
 let lastExportStats=null;
 async function exportMP4(q,size,prog,noSave){
   if(!canMp4())throw new Error(window.Mp4Muxer?'WebCodecs (VideoEncoder) er ikke tilgængelig i denne browser — brug WebM':'MP4-modulet (mp4-muxer.min.js) kunne ikke indlæses — brug WebM');
@@ -3301,7 +3371,7 @@ async function exportMP4(q,size,prog,noSave){
   /* — video — */
   const expVid=document.createElement('video');expVid.muted=true;expVid.playsInline=true;expVid.preload='auto';
   let frameIdx=0,lastTs=-1,pend=null,snapN=0;
-  const stats=lastExportStats={frames:0,drops:0,rewinds:0};
+  const stats=lastExportStats={frames:0,drops:0,rewinds:0,unfixed:0};
   const keyEvery=fps*2,frameUs=Math.round(1e6/fps);
   /* Hvert billede holdes tilbage til det næste kendes, så dets varighed er
      den reelle afstand, og det sidste billede slutter præcis ved total. */
@@ -3357,14 +3427,17 @@ async function exportMP4(q,size,prog,noSave){
            tilbage til sidst leverede billede. En reel standsning er en fejl —
            aldrig et stille "færdig" med frosne afsnit. */
         await new Promise((res,rej)=>{
-          let done=false,guard=null,rv=0,lastMt=-1,prevMt=-1,srcDt=0,nDt=0,rewoundAt=-2,nRew=0,paused=false,cpoll=0,m=0,heldOk=false,busy=Promise.resolve();
+          let done=false,guard=null,rv=0,lastMt=-1,prevMt=-1,prevPF=-1,srcDt=0,nDt=0,rewoundAt=-2,nRew=0,rateExp=0,costMs=0,armCt=-1,paused=false,cpoll=0,m=0,heldOk=false,busy=Promise.resolve();
           const cleanup=()=>{clearTimeout(guard);clearInterval(cpoll);document.removeEventListener('visibilitychange',onVis);if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}};
-          const capture=()=>{
+          /* Fang videoens aktuelle billede i NEXT (false: intet billede endnu). */
+          const grab=()=>{
             const w=expVid.videoWidth,h=expVid.videoHeight;
-            if(!w||!h||expVid.readyState<2)return;
-            if(HELD.width!==w||HELD.height!==h){HELD.width=w;HELD.height=h}
-            HELDX.drawImage(expVid,0,0,w,h);heldOk=true;
+            if(!w||!h||expVid.readyState<2)return false;
+            if(NEXT.width!==w||NEXT.height!==h){NEXT.width=w;NEXT.height=h}
+            NEXTX.drawImage(expVid,0,0,w,h);return true;
           };
+          const swapHeld=()=>{[HELD,NEXT]=[NEXT,HELD];[HELDX,NEXTX]=[NEXTX,HELDX];heldOk=true};
+          const capture=()=>{if(grab())swapHeld()};
           /* Alle tik før L (klippets lokale tid) med det fastholdte billede. */
           const ticksBefore=L=>{
             const out=[];
@@ -3374,11 +3447,15 @@ async function exportMP4(q,size,prog,noSave){
           const finish=()=>{if(done)return;done=true;cleanup();expVid.pause();
             busy.then(()=>expCancelled?null:submitAll(ticksBefore(Infinity))).then(()=>res(),rej)};
           const fail=e=>{if(done)return;done=true;cleanup();expVid.pause();busy.catch(()=>{}).then(()=>rej(e))};
-          const arm=()=>{clearTimeout(guard);guard=setTimeout(onStall,5000)};
+          const arm=()=>{clearTimeout(guard);armCt=expVid.currentTime;guard=setTimeout(onStall,5000)};
           const onStall=()=>{
             if(done)return;
             if(document.hidden){hide();return}
             if(expCancelled||expVid.ended||expVid.currentTime>=c.out-0.05){finish();return}
+            /* VFR-kilde med et stillestående stykke (skærmoptagelser): ingen
+               nye billeder, men afspilningen går videre. Tikkene skrives med
+               det fastholdte billede når næste billede kommer. */
+            if(!expVid.paused&&expVid.currentTime>armCt+0.05){arm();return}
             fail(new Error(`Klip ${i+1} (${it.name}) gik i stå under eksporten — ingen nye billeder i 5 s`));
           };
           const hide=()=>{
@@ -3394,7 +3471,8 @@ async function exportMP4(q,size,prog,noSave){
               if(document.hidden){paused=false;hide();return}
               /* Billedet ved søgepunktet fastholdes: klippets første billede,
                  eller det sidst leverede efter en pause/tilbagespoling. */
-              capture();if(lastMt<0)lastMt=c.in;prevMt=-1;
+              capture();if(lastMt<0)lastMt=c.in;prevMt=-1;prevPF=-1;
+              setRate();
               arm();rv=expVid.requestVideoFrameCallback(onFrame);
               expVid.play().catch(e=>{if(!e||e.name!=='AbortError')fail(e||new Error('afspilning fejlede'))});
             };
@@ -3406,10 +3484,25 @@ async function exportMP4(q,size,prog,noSave){
             else if(paused){paused=false;clearInterval(cpoll);startAt(lastMt>=0?lastMt:clamp(c.in,0,Math.max(0,(it.dur||1)-0.01)))}
           };
           document.addEventListener('visibilitychange',onVis);
-          const rewind=()=>{
+          /* Fart: 0,5^rateExp. Indtil kildens billedinterval er målt (to
+             billeder uden spring), afspilles der i mindst halv fart: det
+             første billede efter en søgning kan ikke tjekkes for huller. */
+          /* Tempo: tegnes hvert billede langsomt (blur-fit, stort format, langsom
+             maskine), sænkes farten så tegningen kan følge med (60 % af den
+             målte tegnetid pr. tik), før rVFC begynder at misse billeder. */
+          const rateWant=()=>{
+            let r=Math.pow(0.5,nDt>=2?rateExp:Math.max(1,rateExp));
+            if(costMs>0)r=Math.min(r,600/(fps*costMs));
+            return clamp(c.speed*r,0.0625,16);
+          };
+          const setRate=()=>{expVid.playbackRate=rateWant()};
+          /* Tilbage til sidst leverede billede, i halv fart; kommer hullet igen
+             samme sted, halveres farten igen (højst til 1/16). */
+          const rewind=again=>{
+            rateExp=again?Math.min(4,rateExp+1):Math.max(1,rateExp);
             rewoundAt=lastMt;nRew++;stats.rewinds++;
             if(rv){try{expVid.cancelVideoFrameCallback(rv)}catch(e){}rv=0}
-            expVid.pause();expVid.playbackRate=clamp(c.speed*0.5,0.0625,16);
+            expVid.pause();setRate();
             startAt(lastMt);
           };
           const onFrame=(now,md)=>{
@@ -3419,13 +3512,34 @@ async function exportMP4(q,size,prog,noSave){
             const mt=md.mediaTime;
             if(mt>=c.out-0.001){finish();return}
             if(mt>lastMt+1e-4&&mt>=c.in-0.02){
-              /* Hul i kildebillederne (mere end 1,8 × det mindste interval)? */
-              const dt=prevMt>=0?mt-prevMt:0;
-              if(dt>0&&nDt>=2&&dt>srcDt*1.8){stats.drops++;if(rewoundAt!==lastMt&&nRew<12){rewind();return}}
-              if(dt>0){srcDt=nDt?Math.min(srcDt,dt):dt;nDt++}
-              prevMt=mt;
+              /* Billedet fanges straks, før tikkene tegnes. */
+              const got=grab();
+              /* Hul i kildebillederne? presentedFrames springer over et tal når
+                 rVFC misser et billede (travl side). Ellers, og for første
+                 billede efter en søgning, afstanden til forrige billede mod
+                 kildens interval (målt kun mellem billeder uden spring). */
+              const pf=typeof md.presentedFrames==='number'?md.presentedFrames:-1;
+              const ref=prevMt>=0?prevMt:lastMt,dt=ref>=0?mt-ref:0;
+              const pfJump=pf>=0&&prevPF>=0?pf-prevPF:0;
+              /* Med presentedFrames tæller den alene (et VFR-stykke uden nye
+                 billeder er ikke et hul; intervallet gav falske huller og
+                 godtog ægte under målt belastning); intervallet bruges kun
+                 uden den, og for første billede efter en søgning. */
+              const drop=pf>=0&&prevPF>=0?pfJump>1:(dt>0&&nDt>=2&&dt>srcDt*1.8);
+              if(drop){
+                stats.drops++;
+                const again=rewoundAt===lastMt;
+                if(nRew<24&&(!again||rateExp<4)){rewind(again);return}
+                stats.unfixed++;
+              }
+              if(prevMt>=0&&dt>0&&(pfJump===1||pf<0)){srcDt=nDt?Math.min(srcDt,dt):dt;nDt++;if(nDt===2&&rateExp===0)setRate()}
+              prevMt=mt;prevPF=pf;
               const L=clamp((mt-c.in)/c.speed,0,d);
-              const frs=ticksBefore(L);capture();lastMt=mt;
+              const t0=performance.now(),frs=ticksBefore(L);if(got)swapHeld();lastMt=mt;
+              if(frs.length){
+                const per=(performance.now()-t0)/frs.length;costMs=costMs?costMs*0.7+per*0.3:per;
+                const w=rateWant();if(Math.abs(expVid.playbackRate-w)>w*0.15)expVid.playbackRate=w;
+              }
               busy=busy.then(()=>submitAll(frs));
               busy.then(()=>{
                 if(done)return;
@@ -3512,12 +3626,12 @@ function exportWebM(q,prog,size){
     },200);
     /* Rydder op ved både stop og fejl. Kun canvas-sporet stoppes: lydsporene
        tilhører den delte g.dest og skal leve videre til næste eksport. */
-    const stopAll=()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVis);webmCtx=null;stream.getVideoTracks().forEach(t=>t.stop());S.masterVol=savedVol;$('masterVol').value=savedVol};
+    const stopAll=()=>{clearInterval(iv);document.removeEventListener('visibilitychange',onVis);webmCtx=null;webmRec=false;stream.getVideoTracks().forEach(t=>t.stop());S.masterVol=savedVol;$('masterVol').value=savedVol};
     rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
     rec.onerror=e=>{stopAll();rej(e.error||new Error('Optagelse fejlede'))};
     rec.onstop=()=>{stopAll();res(new Blob(chunks,{type:'video/webm'}))};
     seekTo(0);
-    setTimeout(()=>{play();rec.start(250)},250);
+    setTimeout(()=>{webmRec=true;WEBM_LAT=0;play();rec.start(250)},250);
   });
 }
 </script>
