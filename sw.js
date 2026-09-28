@@ -3,7 +3,7 @@
    VERSION skal bumpes, og cachen er kun reserve når nettet er væk.
    Øvrige filer (css, ikoner, fonte, mp4-muxer) er cache-først.
    Registreres IKKE når appen serveres lokalt (fx fra GenStudio på :8340). */
-const VERSION = 'mediestudio-v5';
+const VERSION = 'mediestudio-v6';
 const SHELL = [
   './',
   './index.html',

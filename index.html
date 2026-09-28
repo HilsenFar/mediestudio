@@ -2788,6 +2788,15 @@ function inspProject(B){
       sb.appendChild(r);
     }
   }
+  /* Windows-udgaven (GitHub Release). Vises kun på nettet; desktop-appen
+     kører fra file:// og er selv Windows-udgaven. */
+  if(location.protocol!=='file:'){
+    const sw=sec(B,'Windows-app');
+    sw.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);margin-bottom:8px">MedieStudio findes også som Windows-program, der kører uden browser.</div>`));
+    const r=el('div','btnRow'),a=el('a','sbtn',ICO('download')+' Hent til Windows');
+    a.href='https://github.com/HilsenFar/mediestudio/releases/latest';a.target='_blank';a.rel='noopener';a.style.textDecoration='none';
+    r.appendChild(a);sw.appendChild(r);
+  }
   if(S.subs.length||S.texts.length)inspSubShared(B);
 }
 
