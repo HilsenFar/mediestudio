@@ -354,8 +354,8 @@ body.focusMode #main{grid-template-columns:1fr}
 kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2px;border-radius:var(--gt-r-1);padding:0 5px;font-size:var(--gt-t-xs);font-family:var(--gt-font-mono)}
 
 /* ---------- Modal / progress / toast ---------- */
-#modalBack,#gsBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:60}
-#modalBack.open,#gsBack.open{display:flex}
+#modalBack,#gsBack,#acBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:60}
+#modalBack.open,#gsBack.open,#acBack.open{display:flex}
 /* Fra GenStudio: bredere dialog med en rulleliste af færdige resultater. */
 #gsBack .modal{width:600px}
 #gsBar{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--dim);margin-bottom:8px}
@@ -373,6 +373,29 @@ kbd{background:var(--panel3);border:1px solid var(--line);border-bottom-width:2p
 .gsTx .meta{font-size:var(--gt-t-xs);color:var(--faint);display:flex;gap:6px;align-items:center}
 #gsEmpty{padding:22px;text-align:center;color:var(--faint);font-size:12px}
 #gsMsg{min-height:18px;margin-top:8px;font-size:12px;color:var(--dim)}
+/* Lydkonverter (MP4 → M4A): samme listeform som Fra GenStudio. */
+#acBack .modal{width:600px}
+#acLead{font-size:12px;line-height:1.5;color:var(--dim);margin:-6px 0 10px}
+#acBar{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+#acCount{margin-left:auto;font-size:var(--gt-t-xs);color:var(--faint)}
+#acList{max-height:min(46vh,420px);overflow-y:auto;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--gt-sub-1)}
+#acEmpty{padding:22px;text-align:center;color:var(--faint);font-size:12px}
+.acRow{display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid var(--line)}
+.acRow:last-child{border-bottom:none}
+.acRow>.gi{flex:none;color:var(--faint)}
+.acTx{min-width:0;flex:1;font-size:12px;line-height:1.4}
+.acTx .n{color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acTx .i{font-size:var(--gt-t-xs);color:var(--faint)}
+.acRow.off .acTx .n{color:var(--dim)}
+.acTrk{flex:none;max-width:150px;font-size:var(--gt-t-xs);background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:2px 6px;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.acTrk:focus{border-color:var(--acc)}
+.acSt{flex:none;min-width:58px;text-align:right;font-size:var(--gt-t-xs);color:var(--dim);font-feature-settings:"tnum" 1}
+.acSt.ok{color:var(--ok)}
+.acSt.err{color:var(--err)}
+.acRm{flex:none;display:inline-flex;align-items:center;padding:5px;background:none;border:none;color:var(--faint);cursor:pointer;border-radius:var(--gt-r-1)}
+.acRm:hover:not(:disabled){color:var(--txt)}
+.acRm:disabled{opacity:.35;cursor:default}
+#acMsg{min-height:18px;margin-top:8px;font-size:12px;color:var(--dim)}
 .modal{background:linear-gradient(180deg,var(--gt-pl-1),var(--gt-sub-1));border:1px solid var(--gt-edge-bezel);border-radius:var(--gt-r-4);box-shadow:var(--gt-e-4);width:430px;max-width:92vw;padding:18px 20px}
 .modal h2{font-family:var(--gt-font-ui);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:var(--gt-track-head);margin-bottom:14px}
 .modal .row label{width:110px}
@@ -461,6 +484,7 @@ textarea:focus-visible,
   <button class="tbtn" id="btnLoadProj" title="Indlæs projekt-fil"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-upload"></use></svg> Indlæs</button>
   <div class="grow"></div>
   <span id="netBadge" style="font-size:var(--gt-t-xs);color:var(--faint)"></span>
+  <button class="tbtn" id="btnAudioConv" title="Lydkonverter: gem lyden fra MP4-videoer som M4A"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-music"></use></svg> Lydkonverter</button>
   <button class="tbtn" id="btnStill" title="Gem nuværende billede som PNG"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-camera"></use></svg> Stillbillede</button>
   <button class="tbtn acc" id="btnExport"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-download"></use></svg> Eksportér video</button>
 </div>
@@ -630,12 +654,30 @@ textarea:focus-visible,
   </div>
 </div>
 
+<div id="acBack">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="acTitle">
+    <h2 id="acTitle">Lydkonverter · MP4 → M4A</h2>
+    <p id="acLead">Lyden tages ud af videoen og gemmes som M4A. AAC-lyd flyttes uændret over, så intet går tabt. Anden lyd (Opus, MP3, PCM fra kameraer) omkodes til AAC.</p>
+    <div id="acBar">
+      <button class="sbtn" id="acPick"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-file-plus"></use></svg> Vælg MP4-filer</button>
+      <span id="acCount"></span>
+    </div>
+    <div id="acList"></div>
+    <div id="acMsg" role="status"></div>
+    <div class="btnRow" style="margin-top:10px;justify-content:flex-end;display:flex">
+      <button class="sbtn" id="acClose">Luk</button>
+      <button class="sbtn acc" id="acGo" disabled>Konvertér</button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="dropOverlay">Slip filerne her</div>
 <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*,.mp4,.mov,.m4v,.webm,.mkv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac" style="display:none">
 <input type="file" id="dirInput" webkitdirectory style="display:none">
 <input type="file" id="projInput" accept=".json" style="display:none">
 <input type="file" id="gridInput" accept=".json,application/json" style="display:none">
+<input type="file" id="acInput" multiple accept=".mp4,.m4v,.mov,video/mp4,video/quicktime" style="display:none">
 
 <script src="./mp4-muxer.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';s.onload=function(){if(typeof netBadgeUpdate==='function')netBadgeUpdate()};document.head.appendChild(s)})()"></script>
 <script>
@@ -777,11 +819,15 @@ $('fileInput').onchange=e=>{addMediaFiles([...e.target.files]);e.target.value=''
 
 /* Træk-og-slip */
 let dragDepth=0;
-addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;$('dropOverlay').style.display='flex'});
+addEventListener('dragenter',e=>{e.preventDefault();dragDepth++;
+  $('dropOverlay').textContent=$('acBack').classList.contains('open')?'Slip MP4-filerne her':'Slip filerne her';
+  $('dropOverlay').style.display='flex'});
 addEventListener('dragleave',e=>{e.preventDefault();if(--dragDepth<=0){dragDepth=0;$('dropOverlay').style.display='none'}});
 addEventListener('dragover',e=>e.preventDefault());
 addEventListener('drop',e=>{
   e.preventDefault();dragDepth=0;$('dropOverlay').style.display='none';
+  /* Åben lydkonverter: filerne skal i konverterens liste, ikke i biblioteket. */
+  if($('acBack').classList.contains('open')){if(!AC.busy)acAdd([...e.dataTransfer.files]);return}
   const all=[...e.dataTransfer.files],fs=all.filter(f=>isMediaName(f.name));
   if(fs.length)addMediaFiles(fs);
   else if(all.length)toast('Ingen video-, billed- eller lydfiler blandt de slupne filer','err');
@@ -3050,6 +3096,17 @@ $('projInput').onchange=async e=>{
    TASTATUR
    ================================================================ */
 addEventListener('keydown',e=>{
+  /* Åben lydkonverter: samme semantik som dialogerne nedenfor. */
+  if($('acBack').classList.contains('open')){
+    if(e.key==='Escape'&&!AC.busy){e.preventDefault();acClose();return}
+    if(e.key==='Tab'){
+      const f=[...$('acBack').querySelectorAll('button,input,select')].filter(x=>x.offsetParent&&!x.disabled);
+      const i=f.indexOf(document.activeElement);
+      if(e.shiftKey&&i<=0){e.preventDefault();f[f.length-1].focus()}
+      else if(!e.shiftKey&&(i<0||i===f.length-1)){e.preventDefault();f[0].focus()}
+    }
+    return;
+  }
   /* Åben GenStudio-dialog: samme semantik som eksport-dialogen nedenfor
      (Escape lukker, Tab holdes inde, ingen globale genveje imens). */
   if($('gsBack').classList.contains('open')){
@@ -3867,6 +3924,701 @@ function gsListen(){
     }
   };
 }
+
+/* ================================================================
+   LYDKONVERTER — MP4/MOV → M4A
+   M4A er en MP4 med kun lyd. AAC og ALAC flyttes pakke for pakke over i
+   en ny M4A uden genkodning, så lyden er bit-identisk med videoens. Anden
+   lyd (Opus, MP3, FLAC, PCM fra kameraer) omkodes til AAC med WebCodecs.
+   ================================================================ */
+
+/* ---------- Lydkonverter: MP4-læser og M4A-skriver ----------
+   Ingen DOM her, så delen kan køres og testes uden for browseren. Kilden
+   læses i skiver: indholdsfortegnelsen (moov og evt. moof'er) hentes ind,
+   men selve lyden bliver liggende i filen — M4A'en er en Blob af skiver af
+   kilden, så en timelang optagelse næsten intet koster i hukommelse. */
+const m4U16=(b,o)=>b[o]<<8|b[o+1];
+const m4U32=(b,o)=>(b[o]<<24|b[o+1]<<16|b[o+2]<<8|b[o+3])>>>0;
+const m4U64=(b,o)=>m4U32(b,o)*4294967296+m4U32(b,o+4);
+const m4I64=(b,o)=>(m4U32(b,o)|0)*4294967296+m4U32(b,o+4);
+const m4Fcc=(b,o)=>String.fromCharCode(b[o],b[o+1],b[o+2],b[o+3]);
+const m4Read=async(f,pos,len)=>new Uint8Array(await f.slice(pos,pos+len).arrayBuffer());
+const m4Body=x=>x.start+x.hdr;
+const m4Lang=v=>v>=0x400&&v!==0x55C4&&v!==0x7FFF?String.fromCharCode((v>>10&31)+96,(v>>5&31)+96,(v&31)+96):'';
+/* Boksene i b[from,to) som {type,start,hdr,end}; stopper ved en beskadiget boks. */
+function m4Boxes(b,from,to){
+  const out=[];
+  for(let p=from;p+8<=to;){
+    let size=m4U32(b,p),hdr=8;
+    if(size===1){if(p+16>to)break;size=m4U64(b,p+8);hdr=16}else if(size===0)size=to-p;
+    if(size<hdr||p+size>to)break;
+    out.push({type:m4Fcc(b,p+4),start:p,hdr,end:p+size});p+=size;
+  }
+  return out;
+}
+const m4Kids=(b,x,skip)=>m4Boxes(b,m4Body(x)+(skip||0),x.end);
+function m4Get(b,x,...path){for(const t of path){if(!x)return null;x=m4Kids(b,x).find(k=>k.type===t)||null}return x}
+/* Topniveauet læses 16 byte ad gangen, så mdat (kan være flere GB) aldrig læses. */
+const M4_TOP=/^(ftyp|styp|moov|mdat|free|skip|wide|uuid|moof|mfra|sidx|ssix|prft|emsg|meta|pdin|pnot|junk)$/;
+async function m4Top(f){
+  const out=[],n=f.size;
+  for(let p=0;p+8<=n;){
+    const h=await m4Read(f,p,16);
+    let size=m4U32(h,0),hdr=8;const type=m4Fcc(h,4);
+    if(!out.length&&!M4_TOP.test(type))throw new Error('filen er ikke en MP4');
+    if(size===1){size=m4U64(h,8);hdr=16}else if(size===0)size=n-p;
+    if(size<hdr)break;
+    out.push({type,start:p,hdr,end:Math.min(p+size,n),cut:p+size>n});
+    p+=size;
+  }
+  return out;
+}
+/* mvhd/mdhd/tkhd (version 1 har 64-bit tider). */
+function m4Head(b,x){
+  const s=m4Body(x),w=b[s]===1?8:4,rd=o=>w===8?m4U64(b,o):m4U32(b,o);
+  if(x.type==='tkhd')return{flags:m4U32(b,s)&0xFFFFFF,ct:rd(s+4),mt:rd(s+4+w),id:m4U32(b,s+4+2*w),dur:rd(s+12+2*w)};
+  return{ct:rd(s+4),mt:rd(s+4+w),ts:m4U32(b,s+4+2*w),dur:rd(s+8+2*w),lang:x.type==='mdhd'?m4U16(b,s+8+3*w):0};
+}
+/* Første prøvebeskrivelse i stsd. QuickTime-lyd (version 1/2) har ekstra
+   felter før børneboksene, og dér ligger esds inde i en 'wave'-boks. */
+function m4Entry(b,stsd){
+  const e=m4Kids(b,stsd,8)[0];if(!e||e.end-e.start<36)return null;
+  const s=m4Body(e),ver=m4U16(b,s+8);
+  let ch=m4U16(b,s+16),bits=m4U16(b,s+18),rate=m4U32(b,s+24)/65536,flags=0,at=28;
+  if(ver===1)at=44;
+  else if(ver===2&&e.end-s>=64){rate=new DataView(b.buffer,b.byteOffset+s+32,8).getFloat64(0);ch=m4U32(b,s+40);bits=m4U32(b,s+48);flags=m4U32(b,s+52);at=64}
+  let kids=m4Boxes(b,s+at,e.end);
+  if(ver&&!kids.length)kids=m4Boxes(b,s+28,e.end);
+  const all=[];for(const k of kids){all.push(k);if(k.type==='wave')for(const z of m4Kids(b,k))all.push({...z,inWave:true})}
+  return{type:e.type,ver,ch,bits,rate,flags,find:t=>all.find(k=>k.type===t)||null};
+}
+/* esds: objekttypen (0x40 = MPEG-4-lyd, dvs. AAC) og AudioSpecificConfig. */
+function m4Esds(b,x){
+  let p=m4Body(x)+4,oti=0,asc=null;const end=x.end;
+  const len=()=>{let n=0;for(let i=0;i<4&&p<end;i++){const c=b[p++];n=n*128+(c&127);if(!(c&128))break}return n};
+  while(p<end){
+    const tag=b[p++],n=len(),q=p;
+    if(tag===3){p+=2;const f=b[p++];if(f&128)p+=2;if(f&64)p+=1+b[p];if(f&32)p+=2;continue}
+    if(tag===4){oti=b[p];p+=13;continue}
+    if(tag===5){asc=b.slice(p,Math.min(p+n,end));break}
+    p=q+n;
+  }
+  return{oti,asc};
+}
+function m4Asc(a){
+  if(!a||a.length<2)return{aot:0,ch:0};
+  let bit=0;const rd=n=>{let v=0;while(n--){v=v*2+((a[bit>>3]>>(7-(bit&7)))&1);bit++}return v};
+  let aot=rd(5);if(aot===31)aot=32+rd(6);
+  if(rd(4)===15)rd(24);
+  const cc=rd(4);return{aot,ch:cc===7?8:cc};
+}
+/* dOps (big-endian) → OpusHead (little-endian), som WebCodecs vil have. */
+function m4OpusHead(b,x){
+  const s=m4Body(x),n=x.end-s;if(n<11)return null;
+  const o=new Uint8Array(8+n),dv=new DataView(o.buffer);
+  o.set([79,112,117,115,72,101,97,100]);o[8]=1;o[9]=b[s+1];
+  dv.setUint16(10,m4U16(b,s+2),true);dv.setUint32(12,m4U32(b,s+4),true);dv.setUint16(16,m4U16(b,s+8),true);
+  o[18]=b[s+10];o.set(b.subarray(s+11,x.end),19);
+  return o;
+}
+/* Hvordan sporet kommer i en M4A: kind 'copy' (AAC/ALAC, uden tab),
+   'trans' (afkodes og kodes som AAC) eller 'no' (why = årsagen). */
+function m4Codec(b,en){
+  const t=en.type,r={kind:'trans',name:t.trim(),wc:null,desc:null,pcm:null};
+  const no=why=>{r.kind='no';r.why=why;return r};
+  if(t==='mp4a'){
+    const es=en.find('esds');if(!es)return no('lydsporet mangler sin AAC-beskrivelse');
+    const{oti,asc}=m4Esds(b,es);
+    if(oti===0x40||oti>=0x66&&oti<=0x68){
+      const a=m4Asc(asc);r.name=a.aot===5?'HE-AAC':a.aot===29?'HE-AAC v2':a.aot===42?'xHE-AAC':'AAC';
+      if(a.ch)r.ch=a.ch;r.kind='copy';r.key=es;return r}
+    if(oti===0x69||oti===0x6B){r.name='MP3';r.wc='mp3';return r}
+    if(oti===0xA5||oti===0xA6){r.name=oti===0xA5?'AC-3':'E-AC-3';r.wc=oti===0xA5?'ac-3':'ec-3';return r}
+    return no('ukendt lydformat (0x'+oti.toString(16)+')');
+  }
+  if(t==='alac'){const k=en.find('alac');if(!k)return no('ALAC-beskrivelsen mangler');r.name='ALAC';r.kind='copy';r.key=k;return r}
+  if(t==='Opus'){const d=en.find('dOps');r.wc='opus';r.desc=d&&m4OpusHead(b,d);return r}
+  if(t==='.mp3'){r.name='MP3';r.wc='mp3';return r}
+  if(t==='fLaC'){const d=en.find('dfLa');r.name='FLAC';r.wc='flac';
+    if(d){const x=b.subarray(m4Body(d)+4,d.end);r.desc=new Uint8Array(4+x.length);r.desc.set([102,76,97,67]);r.desc.set(x,4)}return r}
+  if(t==='ac-3'||t==='ec-3'){r.name=t==='ac-3'?'AC-3':'E-AC-3';r.wc=t;return r}
+  if(t==='ulaw'||t==='alaw'){r.name=t==='ulaw'?'µ-law':'A-law';r.wc=t;return r}
+  if(t==='enca')return no('lyden er krypteret (DRM)');
+  /* Ukomprimeret PCM (fx fra Sony- og Panasonic-kameraer) regnes om direkte. */
+  const enda=()=>{const x=en.find('enda');return!!(x&&m4U16(b,m4Body(x))&1)};
+  const pcm=(bits,float,le,u8)=>{
+    if(float?bits!==32&&bits!==64:![8,16,24,32].includes(bits))return no('PCM med '+bits+' bit understøttes ikke');
+    r.name='PCM';r.pcm={bits,float,le,u8:!!u8};return r};
+  if(t==='sowt')return pcm(en.bits||16,false,true);
+  if(t==='twos')return pcm(en.bits||16,false,false);
+  if(t==='raw ')return pcm(8,false,false,true);
+  if(t==='in24')return pcm(24,false,enda());
+  if(t==='in32')return pcm(32,false,enda());
+  if(t==='fl32')return pcm(32,true,enda());
+  if(t==='fl64')return pcm(64,true,enda());
+  if(t==='lpcm')return pcm(en.bits,!!(en.flags&1),!(en.flags&2),en.bits===8&&!(en.flags&5));
+  if(t==='ipcm'||t==='fpcm'){const c=en.find('pcmC');return pcm(c?b[m4Body(c)+5]:en.bits,t==='fpcm',!!(c&&b[m4Body(c)+4]&1))}
+  return no('lydformatet '+t.trim()+' kendes ikke');
+}
+function m4Hdlr(b,x){
+  let a=b.subarray(m4Body(x)+24,x.end);
+  if(a.length>1&&a[0]===a.length-1-(a[a.length-1]===0?1:0))a=a.subarray(1);   /* QuickTime: Pascal-streng */
+  const z=a.indexOf(0);if(z>=0)a=a.subarray(0,z);
+  try{return new TextDecoder().decode(a).trim()}catch(e){return''}
+}
+function m4Elst(b,x){
+  if(!x)return null;
+  const s=m4Body(x),v=b[s],n=m4U32(b,s+4),w=v===1?20:12,out=[];
+  for(let i=0,p=s+8;i<n&&p+w<=x.end;i++,p+=w)
+    out.push(v===1?{dur:m4U64(b,p),mt:m4I64(b,p+8),rate:m4U32(b,p+16)}:{dur:m4U32(b,p),mt:m4U32(b,p+4)|0,rate:m4U32(b,p+8)});
+  return out.length?out:null;
+}
+/* stsd til M4A'en: en ISO-beskrivelse kopieres uændret (kun datareferencen
+   sættes til 1). QuickTime-lyd (version 1/2 eller esds i 'wave') bygges om
+   til en almindelig version 0-beskrivelse med samme esds-/alac-boks. */
+function m4StsdFor(b,stsd,en,key){
+  if(!en.ver&&!key.inWave){
+    const c=b.slice(stsd.start,stsd.end);
+    for(const e of m4Boxes(c,stsd.hdr+8,c.length)){c[e.start+14]=0;c[e.start+15]=1}
+    return c;
+  }
+  const r=Math.round(en.rate);
+  return m4Box('stsd',[4,0],[4,1],m4Box(en.type,[6,0],[2,1],[8,0],[2,en.ch||2],[2,en.bits>0&&en.bits<=32?en.bits:16],[4,0],[4,r<65536?r*65536:0],b.slice(key.start,key.end)));
+}
+/* Prøvetabellen (stbl): størrelser, varigheder (stts-løb [antal,varighed])
+   og chunks som [filposition, antal prøver, beskrivelse]. */
+function m4Stbl(b,stbl,t){
+  const g=k=>m4Get(b,stbl,k),sz=g('stsz'),z2=g('stz2'),co=g('stco')||g('co64'),sc=g('stsc'),tt=g('stts');
+  if(!(sz||z2)||!co||!sc||!tt)return null;
+  const room=(x,n)=>{if(m4Body(x)+n>x.end)throw new Error('filen er beskadiget (prøvetabellen er for kort)')};
+  let N,fixed=0,sizes=null;
+  if(sz){const p=m4Body(sz);fixed=m4U32(b,p+4);N=m4U32(b,p+8);
+    if(!fixed){room(sz,12+4*N);sizes=new Uint32Array(N);for(let i=0;i<N;i++)sizes[i]=m4U32(b,p+12+4*i)}}
+  else{const p=m4Body(z2),fs=b[p+7];N=m4U32(b,p+8);room(z2,12+Math.ceil(N*fs/8));sizes=new Uint32Array(N);
+    for(let i=0;i<N;i++)sizes[i]=fs===16?m4U16(b,p+12+2*i):fs===8?b[p+12+i]:b[p+12+(i>>1)]>>(i&1?0:4)&15}
+  /* PCM: en "prøve" er ét billede af kanalerne; QuickTime skriver ofte 1 i stsz. */
+  if(t.pcm){fixed=t.pcm.bits/8*(t.ch||0);sizes=null}
+  const c64=co.type==='co64',cp=m4Body(co),nc=m4U32(b,cp+4);room(co,8+nc*(c64?8:4));
+  const sp=m4Body(sc),ns=m4U32(b,sp+4);room(sc,8+12*ns);
+  const chunks=[];let s=0;
+  for(let e=0;e<ns&&s<N;e++){
+    const c0=m4U32(b,sp+8+12*e)-1,per=m4U32(b,sp+12+12*e),sdi=m4U32(b,sp+16+12*e);
+    const c1=Math.min(nc,e+1<ns?m4U32(b,sp+20+12*e)-1:nc);
+    if(!per)continue;
+    for(let c=Math.max(0,c0);c<c1&&s<N;c++){const n=Math.min(per,N-s);chunks.push([c64?m4U64(b,cp+8+8*c):m4U32(b,cp+8+4*c),n,sdi]);s+=n}
+  }
+  const tp=m4Body(tt),nt=m4U32(b,tp+4);room(tt,8+8*nt);
+  const runs=[];for(let e=0;e<nt;e++)runs.push([m4U32(b,tp+8+8*e),m4U32(b,tp+12+8*e)]);
+  return{N:s,fixed,sizes:sizes&&sizes.subarray(0,s),runs,chunks};
+}
+function m4Run(runs,d){const l=runs[runs.length-1];if(l&&l[1]===d)l[0]++;else runs.push([1,d])}
+function m4Trim(runs,n){
+  const out=[];let left=n;
+  for(const[c,d]of runs){if(left<=0)break;const k=Math.min(c,left);if(k)out.push([k,d]);left-=k}
+  if(left>0){const l=out[out.length-1];if(l)l[0]+=left;else out.push([left,1024])}
+  return out;
+}
+/* Fragmenteret MP4 (OBS, browser-optagelser): prøverne står i moof/traf/trun. */
+async function m4Frags(f,top,b,moov,tracks){
+  const trex={},byId={};for(const t of tracks)byId[t.id]=t;
+  const mvex=m4Get(b,moov,'mvex');
+  if(mvex)for(const x of m4Kids(b,mvex))if(x.type==='trex'){const s=m4Body(x);trex[m4U32(b,s+4)]={sdi:m4U32(b,s+8),dur:m4U32(b,s+12),size:m4U32(b,s+16)}}
+  for(const tb of top){
+    if(tb.type!=='moof'||tb.cut)continue;
+    const m=await m4Read(f,tb.start,tb.end-tb.start),moof={start:0,hdr:tb.hdr,end:m.length};
+    let prevEnd=tb.start;
+    for(const tf of m4Kids(m,moof)){
+      if(tf.type!=='traf')continue;
+      const hd=m4Get(m,tf,'tfhd');if(!hd)continue;
+      let p=m4Body(hd);const fl=m4U32(m,p)&0xFFFFFF,id=m4U32(m,p+4);p+=8;
+      const d=trex[id]||{sdi:1,dur:0,size:0};let base=null,sdi=d.sdi,dDur=d.dur,dSize=d.size;
+      if(fl&1){base=m4U64(m,p);p+=8}
+      if(fl&2){sdi=m4U32(m,p);p+=4}
+      if(fl&8){dDur=m4U32(m,p);p+=4}
+      if(fl&16){dSize=m4U32(m,p);p+=4}
+      if(base===null)base=fl&0x20000?tb.start:prevEnd;
+      const t=byId[id];let pos=base;
+      for(const tr of m4Kids(m,tf)){
+        if(tr.type!=='trun')continue;
+        let q=m4Body(tr);const tfl=m4U32(m,q)&0xFFFFFF,n=m4U32(m,q+4);q+=8;
+        if(tfl&1){pos=base+(m4U32(m,q)|0);q+=4}
+        if(tfl&4)q+=4;
+        const rec=4*((tfl>>8&1)+(tfl>>9&1)+(tfl>>10&1)+(tfl>>11&1));
+        if(q+n*rec>tr.end)throw new Error('filen er beskadiget (fragment)');
+        const start=pos;
+        for(let i=0;i<n;i++){
+          let dur=dDur,size=dSize;
+          if(tfl&0x100){dur=m4U32(m,q);q+=4}
+          if(tfl&0x200){size=m4U32(m,q);q+=4}
+          q+=4*((tfl>>10&1)+(tfl>>11&1));
+          pos+=size;
+          if(t){t.fsizes.push(size);m4Run(t.fruns,dur)}
+        }
+        if(t&&n)t.fchunks.push([start,n,sdi]);
+      }
+      prevEnd=pos;
+    }
+  }
+}
+/* Samler prøvetabel + fragmenter og skærer det væk der ligger efter filens
+   slutning (en afbrudt optagelse giver så en kortere M4A, ikke en fejl). */
+function m4Finish(f,t){
+  const tab=t.tab||{N:0,fixed:0,sizes:null,runs:[],chunks:[]},frag=t.fchunks.length>0;
+  let{N,fixed,sizes,runs,chunks}=tab;
+  if(frag&&t.pcm){t.kind='no';t.why='fragmenteret PCM-lyd understøttes ikke'}
+  else if(frag){
+    const all=new Uint32Array(N+t.fsizes.length);
+    if(sizes)all.set(sizes);else all.fill(fixed,0,N);
+    all.set(t.fsizes,N);
+    runs=m4Trim(runs,N).concat(t.fruns);chunks=chunks.concat(t.fchunks);N+=t.fsizes.length;sizes=all;fixed=0;
+  }
+  delete t.tab;delete t.fsizes;delete t.fruns;delete t.fchunks;
+  if(!sizes&&!fixed)chunks=[];
+  let s=0,kept=0,bytes=0;const keep=[];
+  for(const[off,n,sdi]of chunks){
+    let k=0,len=0;
+    if(!sizes){k=Math.max(0,Math.min(n,Math.floor((f.size-off)/fixed)));len=k*fixed}
+    else for(;k<n&&off+len+sizes[s+k]<=f.size;k++)len+=sizes[s+k];
+    if(k)keep.push([off,k,sdi]);
+    kept+=k;bytes+=len;s+=n;
+    if(k<n){t.truncated=true;break}
+  }
+  /* Komprimeret lyd med fast pakkestørrelse (fx CBR-MP3) får en fuld
+     størrelsestabel, så resten af koden kun kender én slags. */
+  t.N=kept;t.fixed=fixed;t.sizes=sizes?sizes.subarray(0,kept):t.pcm?null:new Uint32Array(kept).fill(fixed);
+  t.chunks=keep;t.bytes=bytes;t.runs=m4Trim(runs,kept);
+  let d=0;for(const[c,x]of t.runs)d+=c*x;
+  t.mediaDur=d;t.dur=t.ts?d/t.ts:0;
+  if(t.truncated||frag)t.extras=[];
+  if(!kept&&t.kind!=='no'){t.kind='no';t.why='lydsporet er tomt'}
+}
+/* Filens lydspor → {tracks,mv,udta}. Kaster en fejl med en læsbar årsag. */
+async function m4Probe(f){
+  const top=await m4Top(f),mb=top.find(x=>x.type==='moov');
+  if(!mb)throw new Error(top.some(x=>x.type==='mdat')?'filen mangler sin indholdsfortegnelse (moov) — optagelsen blev nok afbrudt':'filen er ikke en MP4');
+  if(mb.cut)throw new Error('filen er afkortet');
+  if(mb.end-mb.start>1<<29)throw new Error('indholdsfortegnelsen er urimeligt stor');
+  const b=await m4Read(f,mb.start,mb.end-mb.start),moov={type:'moov',start:0,hdr:mb.hdr,end:b.length};
+  const mvhd=m4Get(b,moov,'mvhd');if(!mvhd)throw new Error('filen er beskadiget (mvhd mangler)');
+  const mv=m4Head(b,mvhd),tracks=[];
+  for(const tk of m4Kids(b,moov)){
+    if(tk.type!=='trak')continue;
+    const hd=m4Get(b,tk,'mdia','hdlr');
+    if(!hd||m4Fcc(b,m4Body(hd)+8)!=='soun')continue;
+    const th=m4Get(b,tk,'tkhd'),md=m4Get(b,tk,'mdia','mdhd'),stbl=m4Get(b,tk,'mdia','minf','stbl'),stsd=stbl&&m4Get(b,stbl,'stsd');
+    const en=stsd&&m4Entry(b,stsd);
+    if(!th||!md||!en)continue;
+    const tkh=m4Head(b,th),mdh=m4Head(b,md);
+    const t={ch:en.ch,...m4Codec(b,en),idx:tracks.length+1,id:tkh.id,on:!!(tkh.flags&1),ts:mdh.ts,lang:mdh.lang,
+      handler:m4Hdlr(b,hd),elst:m4Elst(b,m4Get(b,tk,'edts','elst')),extras:[],fsizes:[],fruns:[],fchunks:[]};
+    t.rate=mdh.ts>=8000&&mdh.ts<=384000?mdh.ts:Math.round(en.rate);
+    if(!t.ts&&t.kind!=='no'){t.kind='no';t.why='lydsporet er beskadiget'}
+    if(t.kind==='copy'){
+      t.stsd=m4StsdFor(b,stsd,en,t.key);
+      t.extras=['stss','ctts','sdtp','sgpd','sbgp'].map(k=>m4Get(b,stbl,k)).filter(Boolean).map(x=>b.slice(x.start,x.end));
+    }
+    delete t.key;
+    t.tab=m4Stbl(b,stbl,t);
+    tracks.push(t);
+  }
+  if(tracks.length&&top.some(x=>x.type==='moof'))await m4Frags(f,top,b,moov,tracks);
+  for(const t of tracks)m4Finish(f,t);
+  /* Metadata (titel, kunstner …) følger med; telefonens GPS-position (©xyz/loci) gør ikke. */
+  const ud=m4Get(b,moov,'udta'),keep=ud?m4Kids(b,ud).filter(k=>k.type!=='\xA9xyz'&&k.type!=='loci'):[];
+  return{tracks,mv,udta:keep.length?m4Box('udta',...keep.map(k=>b.slice(k.start,k.end))):null};
+}
+/* Byte-bygger: Uint8Array | 'tekst' (latin-1) | [bredde, tal]. */
+function m4Pack(...xs){
+  let n=0;for(const x of xs)n+=x instanceof Uint8Array?x.length:typeof x==='string'?x.length:x[0];
+  const o=new Uint8Array(n);let p=0;
+  for(const x of xs){
+    if(x instanceof Uint8Array){o.set(x,p);p+=x.length}
+    else if(typeof x==='string'){for(let i=0;i<x.length;i++)o[p++]=x.charCodeAt(i)&255}
+    else{const[w,v]=x;
+      if(v<0){let q=BigInt(v)+(1n<<BigInt(8*w));for(let i=w-1;i>=0;i--){o[p+i]=Number(q&255n);q>>=8n}}
+      else{let q=v;for(let i=w-1;i>=0;i--){o[p+i]=q%256;q=Math.floor(q/256)}}
+      p+=w}
+  }
+  return o;
+}
+function m4Box(type,...xs){const body=m4Pack(...xs);return m4Pack([4,body.length+8],type,body)}
+/* Tabel-boks (FullBox v0): hovedfelter + værdier som u32 (eller u64). */
+function m4Tab(type,head,vals,w8){
+  const n=12+4*head.length+(w8?8:4)*vals.length,a=new Uint8Array(n),dv=new DataView(a.buffer);
+  dv.setUint32(0,n);for(let i=0;i<4;i++)a[4+i]=type.charCodeAt(i);
+  let p=12;for(const h of head){dv.setUint32(p,h);p+=4}
+  for(let i=0;i<vals.length;i++){const v=vals[i];if(w8){dv.setUint32(p,Math.floor(v/4294967296));dv.setUint32(p+4,v>>>0);p+=8}else{dv.setUint32(p,v);p+=4}}
+  return a;
+}
+const M4_MAT=[[4,0x10000],[4,0],[4,0],[4,0],[4,0x10000],[4,0],[4,0],[4,0],[4,0x40000000]];
+/* esds for AAC fra koderen (AudioSpecificConfig + bitrate). */
+function m4EsdsFor(asc,br){
+  const dsi=m4Pack([1,5],[1,asc.length],asc),dcd=m4Pack([1,4],[1,13+dsi.length],[1,0x40],[1,0x15],[3,0],[4,br],[4,br],dsi),sl=m4Pack([1,6],[1,1],[1,2]);
+  return m4Box('esds',[4,0],m4Pack([1,3],[1,3+dcd.length+sl.length],[2,0],[1,0],dcd,sl));
+}
+/* Samler M4A'en: ftyp 'M4A ', moov med ét lydspor og mdat med prøverne
+   (parts: Blob-skiver af kilden eller Uint8Arrays) i rækkefølge. */
+function m4Write(o){
+  const{N,sizes,runs,ts}=o,mvts=o.mvts||1000;
+  /* Chunks på ≈ 1 s; ny chunk når prøvebeskrivelsen skifter. */
+  const cn=[],cd=[],cr=[];let rel=0,acc=ts,ri=0,rl=runs.length?runs[0][0]:0,last=-1;
+  for(let i=0;i<N;i++){
+    while(rl<=0&&ri<runs.length-1)rl=runs[++ri][0];
+    const d=runs.length?runs[ri][1]:0,sd=o.sdis?o.sdis[i]:1;rl--;
+    if(acc>=ts||sd!==last){cn.push(0);cd.push(sd);cr.push(rel);acc=0;last=sd}
+    cn[cn.length-1]++;acc+=d;rel+=sizes[i];
+  }
+  const sc=[];for(let k=0;k<cn.length;k++)if(!k||cn[k]!==cn[k-1]||cd[k]!==cd[k-1])sc.push(k+1,cn[k],cd[k]);
+  let same=N>0;for(let i=1;i<N&&same;i++)if(sizes[i]!==sizes[0])same=false;
+  let md=0;for(const[c,d]of runs)md+=c*d;
+  const conv=x=>Math.round(x*mvts/ts);
+  /* Redigeringslisten (fx AAC-koderens 1024 opstartsprøver) følger med. Et
+     afkortet spor beholder kun startforskydningen; varighed 0 (fragmenteret
+     kilde) = resten af sporet. */
+  let el=o.elst;
+  if(el&&o.trunc){const e=el.find(x=>x.mt>=0);el=[{dur:0,mt:e?e.mt:0,rate:0x10000}]}
+  if(el)el=el.map(e=>e.dur||e.mt<0?e:{...e,dur:conv(Math.max(0,md-e.mt))});
+  const tdur=el?el.reduce((a,e)=>a+e.dur,0):conv(md);
+  const hv=[o.ct,o.mt,tdur,md].some(x=>x>0xFFFFFFFF)?1:0,w=hv?8:4;
+  const ev=el&&el.some(e=>e.dur>0xFFFFFFFF||Math.abs(e.mt)>0x7FFFFFFF)?1:0,ew=ev?8:4;
+  const mvhd=m4Box('mvhd',[1,hv],[3,0],[w,o.ct],[w,o.mt],[4,mvts],[w,tdur],[4,0x10000],[2,0x100],[10,0],...M4_MAT,[24,0],[4,2]);
+  const tkhd=m4Box('tkhd',[1,hv],[3,3],[w,o.ct],[w,o.mt],[4,1],[4,0],[w,tdur],[8,0],[2,0],[2,0],[2,0x100],[2,0],...M4_MAT,[4,0],[4,0]);
+  const edts=el?[m4Box('edts',m4Box('elst',[1,ev],[3,0],[4,el.length],...el.flatMap(e=>[[ew,e.dur],[ew,e.mt],[4,e.rate]])))]:[];
+  const mdhd=m4Box('mdhd',[1,hv],[3,0],[w,o.ct],[w,o.mt],[4,ts],[w,md],[2,o.lang||0x55C4],[2,0]);
+  const hdlr=m4Box('hdlr',[4,0],[4,0],'soun',[12,0],'SoundHandler\0');
+  const smhd=m4Box('smhd',[4,0],[4,0]),dinf=m4Box('dinf',m4Box('dref',[4,0],[4,1],m4Box('url ',[4,1])));
+  const stts=m4Tab('stts',[runs.length],runs.flat()),stsc=m4Tab('stsc',[cn.length?sc.length/3:0],sc);
+  const stsz=same?m4Tab('stsz',[sizes[0],N],[]):m4Tab('stsz',[0,N],sizes.subarray?sizes.subarray(0,N):sizes.slice(0,N));
+  const big=rel+16>0xFFFFFFFF,hdr=big?16:8;
+  const moov=base=>m4Box('moov',mvhd,
+    m4Box('trak',tkhd,...edts,m4Box('mdia',mdhd,hdlr,m4Box('minf',smhd,dinf,
+      m4Box('stbl',o.stsd,stts,stsc,stsz,m4Tab(big?'co64':'stco',[cr.length],cr.map(r=>base+r),big),...(o.extras||[]))))),
+    ...(o.udta?[o.udta]:[]));
+  const ftyp=m4Box('ftyp','M4A ',[4,0x200],'M4A ','mp42','isom');
+  const pre=ftyp.length+moov(0).length+hdr;
+  const head=[ftyp,moov(pre),big?m4Pack([4,1],'mdat',[8,rel+16]):m4Pack([4,rel+8],'mdat')];
+  return{head,parts:o.parts,size:pre+rel,dur:md/ts,blob:new Blob([...head,...o.parts],{type:'audio/mp4'})};
+}
+/* AAC/ALAC: prøverne flyttes uændret — tilstødende prøver bliver én skive. */
+function m4Copy(f,P,t){
+  const N=t.N,sizes=t.sizes||new Uint32Array(N).fill(t.fixed),sdis=new Uint16Array(N),parts=[];
+  let s=0,rs=0,re=-1;
+  for(const[off,n,sdi]of t.chunks){
+    let o=off;
+    for(let k=0;k<n;k++,s++){sdis[s]=sdi;if(o!==re){if(re>rs)parts.push(f.slice(rs,re));rs=re=o}re+=sizes[s];o+=sizes[s]}
+  }
+  if(re>rs)parts.push(f.slice(rs,re));
+  const ok=P.mv.ts>0;
+  return m4Write({N,sizes,runs:t.runs,sdis,parts,ts:t.ts,mvts:ok?P.mv.ts:1000,elst:ok?t.elst:null,trunc:t.truncated,
+    stsd:t.stsd,extras:t.extras,udta:P.udta,lang:t.lang,ct:P.mv.ct,mt:P.mv.mt});
+}
+/* PCM-bytes → Float32-planer. */
+function m4Pcm(u,C,q){
+  const B=q.bits>>3,F=B*C,n=Math.floor(u.length/F),dv=new DataView(u.buffer,u.byteOffset,u.byteLength),le=q.le,out=[];
+  for(let c=0;c<C;c++)out.push(new Float32Array(n));
+  for(let i=0;i<n;i++)for(let c=0;c<C;c++){
+    const p=i*F+c*B;let v;
+    if(q.float)v=B===8?dv.getFloat64(p,le):dv.getFloat32(p,le);
+    else if(B===1)v=q.u8?(u[p]-128)/128:dv.getInt8(p)/128;
+    else if(B===2)v=dv.getInt16(p,le)/32768;
+    else if(B===3){let x=le?u[p]|u[p+1]<<8|u[p+2]<<16:u[p]<<16|u[p+1]<<8|u[p+2];if(x&0x800000)x-=0x1000000;v=x/8388608}
+    else v=dv.getInt32(p,le)/2147483648;
+    out[c][i]=v;
+  }
+  return out;
+}
+/* Ned-miks til koderens kanaler (L R C LFE Ls Rs → stereo) og lineær
+   omsampling til 44,1/48 kHz. Kun omkodningens nødvej; AAC kopieres. */
+function m4Shaper(inRate,outRate,outCh){
+  const step=inRate/outRate;let pos=0,prev=null;
+  return planes=>{
+    const n=planes[0].length;
+    if(planes.length>outCh&&outCh===2){
+      const L=new Float32Array(n),R=new Float32Array(n),k=Math.SQRT1_2,[l,r,C,,Ls,Rs]=planes,g=1/(1+(C?k:0)+(Ls?k:0));
+      for(let i=0;i<n;i++){const c=C?C[i]*k:0;L[i]=(l[i]+c+(Ls?Ls[i]*k:0))*g;R[i]=(r[i]+c+(Rs?Rs[i]*k:0))*g}
+      planes=[L,R];
+    }else if(planes.length>outCh){const m=new Float32Array(n);for(const p of planes)for(let i=0;i<n;i++)m[i]+=p[i]/planes.length;planes=[m]}
+    else if(planes.length<outCh)planes=[planes[0],planes[0]];
+    if(step===1||!n)return planes;
+    if(!prev)prev=planes.map(p=>p[0]);
+    const cnt=pos>n-1?0:Math.floor((n-1-pos)/step)+1,out=planes.map(()=>new Float32Array(cnt));
+    for(let j=0;j<cnt;j++){const p=pos+j*step,i=Math.floor(p),fr=p-i;
+      for(let c=0;c<planes.length;c++){const x=planes[c],a=i<0?prev[c]:x[i],z=i+1<n?x[i+1]:x[n-1];out[c][j]=a+(z-a)*fr}}
+    pos+=cnt*step-n;prev=planes.map(p=>p[n-1]);
+    return out;
+  };
+}
+
+/* ---------- Lydkonverter: omkodning (kun i browseren) ----------
+   Lyd der ikke kan ligge i en M4A som den er, afkodes pakke for pakke med
+   WebCodecs (PCM regnes om direkte) og kodes som AAC — i bidder, så lange
+   filer ikke fylder hukommelsen. */
+function m4Planes(a){
+  const n=a.numberOfFrames,C=a.numberOfChannels,out=[];
+  try{for(let c=0;c<C;c++){const p=new Float32Array(n);a.copyTo(p,{planeIndex:c,format:'f32-planar'});out.push(p)}return out}catch(e){}
+  /* Ældre browsere kan ikke omregne formatet i copyTo. */
+  const base=a.format.replace('-planar',''),planar=a.format!==base,T={u8:Uint8Array,s16:Int16Array,s32:Int32Array,f32:Float32Array}[base];
+  const v=x=>base==='u8'?(x-128)/128:base==='s16'?x/32768:base==='s32'?x/2147483648:x;
+  if(planar)return Array.from({length:C},(_,c)=>{const r=new T(n);a.copyTo(r,{planeIndex:c});return Float32Array.from(r,v)});
+  const r=new T(n*C);a.copyTo(r,{planeIndex:0});
+  return Array.from({length:C},(_,c)=>{const p=new Float32Array(n);for(let i=0;i<n;i++)p[i]=v(r[i*C+c]);return p});
+}
+async function m4Transcode(f,P,t,prog,stop){
+  if(!window.AudioEncoder||!window.AudioData)throw new Error('omkodning kræver WebCodecs (Chrome eller Edge)');
+  const rate=t.rate===44100||t.rate===48000?t.rate:48000,ch=Math.min(2,t.ch||2);
+  let br=0;
+  for(const x of[192000,160000,128000]){try{if((await AudioEncoder.isConfigSupported({codec:'mp4a.40.2',sampleRate:rate,numberOfChannels:ch,bitrate:x})).supported){br=x;break}}catch(e){}}
+  if(!br)throw new Error('browseren kan ikke kode AAC');
+  const PAGE=1<<22,pages=[],sizes=[];let page=new Uint8Array(PAGE),pp=0,asc=null,err=null,frames=0,shape=null,dec=null;
+  const enc=new AudioEncoder({output:(c,m)=>{
+    const d=m&&m.decoderConfig&&m.decoderConfig.description;
+    if(d&&!asc)asc=ArrayBuffer.isView(d)?new Uint8Array(d.buffer,d.byteOffset,d.byteLength).slice():new Uint8Array(d).slice();
+    if(pp+c.byteLength>page.length){pages.push(page.subarray(0,pp));page=new Uint8Array(Math.max(PAGE,c.byteLength));pp=0}
+    c.copyTo(page.subarray(pp,pp+c.byteLength));pp+=c.byteLength;sizes.push(c.byteLength);
+  },error:e=>{err=err||e}});
+  const push=(planes,sr)=>{
+    if(!shape)shape=m4Shaper(sr,rate,ch);
+    const o=shape(planes),n=o.length?o[0].length:0;if(!n)return;
+    const data=new Float32Array(n*ch);for(let c=0;c<ch;c++)data.set(o[c],c*n);
+    enc.encode(new AudioData({format:'f32-planar',sampleRate:rate,numberOfFrames:n,numberOfChannels:ch,timestamp:Math.round(frames*1e6/rate),data}));
+    frames+=n;
+  };
+  /* Kø-bremse: 'dequeue' + en timer, så en lukket codec aldrig hænger løkken. */
+  const tick=x=>Promise.race([new Promise(r=>x.addEventListener('dequeue',r,{once:true})),sleep(100)]);
+  const drain=async()=>{
+    while(dec&&dec.state==='configured'&&dec.decodeQueueSize>16)await tick(dec);
+    while(enc.state==='configured'&&enc.encodeQueueSize>16)await tick(enc);
+    if(err)throw err;
+    if(stop())throw new DOMException('Stoppet','AbortError');
+  };
+  try{
+    enc.configure({codec:'mp4a.40.2',sampleRate:rate,numberOfChannels:ch,bitrate:br});
+    if(t.pcm){
+      const F=t.fixed,step=Math.max(1,Math.floor((1<<22)/F));let done=0;
+      for(const[off,n]of t.chunks)for(let k=0;k<n;k+=step){
+        const m=Math.min(step,n-k);push(m4Pcm(await m4Read(f,off+k*F,m*F),t.ch,t.pcm),t.rate);
+        done+=m;prog(done/t.N);await drain();
+      }
+    }else{
+      const cfg={codec:t.wc,sampleRate:t.rate,numberOfChannels:t.ch};if(t.desc)cfg.description=t.desc;
+      dec=new AudioDecoder({output:a=>{try{push(m4Planes(a),a.sampleRate)}catch(e){err=err||e}finally{a.close()}},error:e=>{err=err||e}});
+      dec.configure(cfg);
+      let s=0,at=0,ri=0,rl=t.runs.length?t.runs[0][0]:0;
+      for(const[off,n]of t.chunks){
+        let len=0;for(let k=0;k<n;k++)len+=t.sizes[s+k];
+        const u=await m4Read(f,off,len);
+        for(let k=0,o=0;k<n;k++,s++){
+          while(rl<=0&&ri<t.runs.length-1)rl=t.runs[++ri][0];
+          const d=t.runs[ri][1],z=t.sizes[s];rl--;
+          dec.decode(new EncodedAudioChunk({type:'key',timestamp:Math.round(at*1e6/t.ts),duration:Math.round(d*1e6/t.ts),data:u.subarray(o,o+z)}));
+          o+=z;at+=d;
+        }
+        prog(s/t.N);await drain();
+      }
+      await dec.flush();
+    }
+    await enc.flush();
+    if(err)throw err;
+  }finally{
+    for(const x of[dec,enc])if(x&&x.state!=='closed')try{x.close()}catch(e){}
+  }
+  if(pp)pages.push(page.subarray(0,pp));
+  if(!asc||!sizes.length)throw new Error('AAC-koderen gav ingen lyd');
+  const N=sizes.length,stsd=m4Box('stsd',[4,0],[4,1],m4Box('mp4a',[6,0],[2,1],[8,0],[2,ch],[2,16],[4,0],[4,rate*65536],m4EsdsFor(asc,br)));
+  return m4Write({N,sizes:Uint32Array.from(sizes),runs:[[N,1024]],parts:pages,ts:rate,mvts:1000,elst:null,
+    stsd,extras:[],udta:P.udta,lang:t.lang,ct:P.mv.ct,mt:P.mv.mt});
+}
+
+/* ---------- Lydkonverter: dialogen ---------- */
+const AC={items:[],busy:false,stop:false,prevFocus:null};
+const AC_EXT=/\.(mp4|m4v|mov)$/i;
+const acClock=s=>{s=Math.round(s||0);const h=Math.floor(s/3600),m=Math.floor(s/60)%60,x=String(s%60).padStart(2,'0');return h?`${h}:${String(m).padStart(2,'0')}:${x}`:`${m}:${x}`};
+const acSize=n=>n<1048576?Math.max(1,Math.round(n/1024))+' KB':(n/1048576).toFixed(n<10485760?1:0)+' MB';
+const acCh=c=>({1:'mono',2:'stereo',6:'5.1',8:'7.1'})[c]||c+' kanaler';
+const acCap=s=>s?s[0].toUpperCase()+s.slice(1):'';
+const acTrack=it=>it.tracks&&it.tracks[it.trk];
+const acReady=it=>(it.state==='ready'||it.state==='err')&&!!acTrack(it)&&acTrack(it).kind!=='no';
+function acInfo(it){
+  if(it.state==='probe')return'Læser filen…';
+  if(it.state==='bad')return acCap(it.msg);
+  const t=acTrack(it);if(!t)return'Ingen lyd i filen';
+  if(it.state==='err')return'Fejl: '+it.msg;
+  const s=`${t.name} · ${+(t.rate/1000).toFixed(1)} kHz · ${acCh(t.ch)} · ${acClock(t.dur)}`;
+  if(it.state==='done')return`${s} · ${acSize(it.out)} gemt som ${it.saved}`;
+  if(t.kind==='no')return s+' · '+t.why;
+  return s+(t.kind==='copy'?' · '+acSize(t.bytes)+' · uden tab':' · omkodes til AAC')+(t.truncated?' · filen er afkortet':'');
+}
+function acStateTxt(it){
+  if(it.state==='busy')return it.pct>0?Math.floor(it.pct*100)+' %':'…';
+  return{probe:'…',done:'Gemt ✓',err:'Fejl',bad:'Fejl',none:'—'}[it.state]||(acReady(it)?'Klar':'Springes over');
+}
+function acRowEl(it){
+  const d=document.createElement('div'),st=it.state;
+  d.className='acRow'+(acReady(it)||st==='busy'||st==='done'?'':' off');d.dataset.id=it.id;
+  const nm=x=>x.handler&&!/handler|sound|audio|media|gpac|smash|^core/i.test(x.handler)?' · '+esc(x.handler):'';
+  const sel=it.tracks&&it.tracks.length>1&&st!=='busy'&&st!=='done'
+    ?`<select class="acTrk" aria-label="Lydspor i ${esc(it.name)}"${AC.busy?' disabled':''}>${it.tracks.map((x,i)=>
+      `<option value="${i}"${i===it.trk?' selected':''}>Spor ${i+1}${nm(x)}${m4Lang(x.lang)?' · '+m4Lang(x.lang):''}</option>`).join('')}</select>`:'';
+  d.innerHTML=ICO('film')+`<div class="acTx"><div class="n" title="${esc(it.name)}">${esc(it.name)}</div><div class="i">${esc(acInfo(it))}</div></div>`+sel+
+    `<span class="acSt${st==='done'?' ok':st==='err'||st==='bad'?' err':''}">${esc(acStateTxt(it))}</span>`+
+    `<button class="acRm" title="Fjern fra listen" aria-label="Fjern ${esc(it.name)}"${AC.busy?' disabled':''}>${ICO('close','gi--sm')}</button>`;
+  if(st==='busy'&&it.pct>0)d.style.background=`linear-gradient(90deg,rgba(25,224,255,.10) ${(it.pct*100).toFixed(1)}%,transparent 0)`;
+  return d;
+}
+function acRenderRow(it){const o=$('acList').querySelector(`.acRow[data-id="${it.id}"]`);if(o)o.replaceWith(acRowEl(it))}
+function acFoot(){
+  const n=AC.items.filter(acReady).length,m=AC.items.length,reading=AC.items.some(x=>x.state==='probe');
+  $('acCount').textContent=m?`${m} ${m===1?'fil':'filer'}${reading?' · læser…':''}`:'';
+  $('acGo').disabled=AC.busy||!n;
+  $('acGo').textContent=AC.busy?'Konverterer…':n>1?`Konvertér ${n} filer`:'Konvertér';
+  $('acPick').disabled=AC.busy;
+  $('acClose').textContent=AC.busy?'Stop':'Luk';
+}
+function acRender(){
+  const L=$('acList');L.innerHTML='';
+  if(!AC.items.length)L.innerHTML='<div id="acEmpty">Træk MP4-filer herind, eller klik på <b>Vælg MP4-filer</b>.<br>Videoer der er markeret i biblioteket, kommer med af sig selv.</div>';
+  for(const it of AC.items)L.appendChild(acRowEl(it));
+  acFoot();
+}
+/* Omkodning kræver både afkoder og AAC-koder i browseren — tjekkes med det
+   samme, så rækken siger det før man trykker Konvertér. */
+let acAacOk=null;
+async function acCanTrans(t){
+  const no=w=>{t.kind='no';t.why=w};
+  if(!window.AudioEncoder||!t.pcm&&!window.AudioDecoder)return no('omkodning kræver Chrome eller Edge');
+  if(acAacOk===null){acAacOk=false;for(const r of[48000,44100])try{if((await AudioEncoder.isConfigSupported({codec:'mp4a.40.2',sampleRate:r,numberOfChannels:2,bitrate:192000})).supported)acAacOk=true}catch(e){}}
+  if(!acAacOk)return no('browseren kan ikke kode AAC');
+  if(t.pcm)return;
+  const cfg={codec:t.wc,sampleRate:t.rate,numberOfChannels:t.ch};if(t.desc)cfg.description=t.desc;
+  let ok=false;try{ok=(await AudioDecoder.isConfigSupported(cfg)).supported}catch(e){}
+  if(!ok)no(t.name+' kan ikke afkodes i denne browser');
+}
+async function acProbe(it){
+  try{
+    const P=await m4Probe(it.file);
+    for(const t of P.tracks)if(t.kind==='trans')await acCanTrans(t);
+    it.P=P;it.tracks=P.tracks;
+    /* Standard: det første aktive spor der kan bruges (OBS o.l. kan have flere). */
+    const i=P.tracks.findIndex(t=>t.on&&t.kind!=='no');
+    it.trk=i>=0?i:Math.max(0,P.tracks.findIndex(t=>t.kind!=='no'));
+    it.state=P.tracks.length?'ready':'none';
+  }catch(e){it.state='bad';it.msg=e&&e.message||String(e);console.warn('Lydkonverter:',it.name,e)}
+  if(AC.items.includes(it)){acRenderRow(it);acFoot()}
+}
+function acAdd(files){
+  const fs=files.filter(f=>AC_EXT.test(f.name));
+  $('acMsg').textContent=files.length>fs.length?`${files.length-fs.length} ${files.length-fs.length===1?'fil er':'filer er'} sprunget over: kun MP4-, M4V- og MOV-filer kan konverteres`:'';
+  const add=[];
+  for(const f of fs){
+    if(AC.items.some(x=>x.file===f||x.name===f.name&&x.file.size===f.size&&x.file.lastModified===f.lastModified))continue;
+    const it={id:uid(),file:f,name:f.name,state:'probe',tracks:null,trk:0,pct:0,msg:''};
+    AC.items.push(it);add.push(it);
+  }
+  acRender();
+  for(const it of add)acProbe(it);
+}
+function acOpen(){
+  if($('acBack').classList.contains('open'))return;
+  AC.prevFocus=document.activeElement;
+  $('acMsg').textContent='';
+  $('acBack').classList.add('open');
+  const sel=S.files.filter(f=>S.binSel.has(f.id)&&f.type==='video'&&f.file&&AC_EXT.test(f.name)).map(f=>f.file);
+  if(sel.length)acAdd(sel);else acRender();
+  $('acPick').focus();
+}
+function acClose(){
+  if(AC.busy)return;
+  $('acBack').classList.remove('open');
+  /* Kun filer der stadig kan konverteres, venter til næste gang dialogen åbnes. */
+  AC.items=AC.items.filter(x=>acReady(x)||x.state==='probe');
+  const p=AC.prevFocus;AC.prevFocus=null;
+  if(p&&p.isConnected&&typeof p.focus==='function')p.focus();
+}
+const acOutName=it=>it.name.replace(/\.[^.]+$/,'')+(it.tracks.length>1&&it.trk>0?` (spor ${it.trk+1})`:'')+'.m4a';
+async function acFreeName(dir,name){
+  const base=name.replace(/\.m4a$/i,'');
+  for(let i=1;i<100;i++){
+    const n=i===1?name:`${base} (${i}).m4a`;
+    try{await dir.getFileHandle(n)}catch(e){if(e.name==='NotFoundError')return n;if(e.name!=='TypeMismatchError')throw e}
+  }
+  return`${base} (${Date.now()}).m4a`;
+}
+/* Skrives i bidder på ≈ 8 MB, så rækken kan vise fremdrift og Stop virker. */
+async function acWriteParts(w,parts,total,prog){
+  let batch=[],bn=0,done=0;
+  const flush=async()=>{
+    if(!batch.length)return;
+    await w.write(new Blob(batch));done+=bn;batch=[];bn=0;prog(done/total);
+    if(AC.stop)throw new DOMException('Stoppet','AbortError');
+  };
+  for(const p of parts){batch.push(p);bn+=p.size!=null?p.size:p.length;if(bn>=1<<23)await flush()}
+  await flush();
+}
+function acDownload(blob,name){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  /* Længe nok til at browseren kan nå at spørge om flere downloads. */
+  setTimeout(()=>URL.revokeObjectURL(a.href),300000);
+}
+async function acGo(){
+  if(AC.busy)return;
+  const todo=AC.items.filter(acReady);if(!todo.length)return;
+  /* Destinationen vælges FØR konverteringen: filvælgerne kræver et frisk klik. */
+  const types=[{description:'M4A-lyd',accept:{'audio/mp4':['.m4a']}}];
+  let one=null,dir=null;
+  try{
+    if(todo.length===1&&window.showSaveFilePicker)one=await showSaveFilePicker({suggestedName:acOutName(todo[0]),types,id:'mediestudio-m4a',startIn:'music'});
+    else if(todo.length>1&&window.showDirectoryPicker)dir=await showDirectoryPicker({id:'mediestudio-m4a',mode:'readwrite',startIn:'music'});
+  }catch(e){if(e&&e.name==='AbortError')return;one=dir=null}
+  AC.busy=true;AC.stop=false;$('acMsg').textContent='';acRender();
+  $('acClose').focus();   /* Konvertér er slået fra under kørslen; fokus på Stop */
+  let ok=0,fail=0;
+  for(const it of todo){
+    if(AC.stop)break;
+    it.state='busy';it.pct=0;it.q=-1;acRenderRow(it);
+    const t=acTrack(it),show=p=>{it.pct=p;const q=Math.floor(p*100);if(q!==it.q){it.q=q;acRenderRow(it)}};
+    let w=null,made=null;
+    try{
+      const r=t.kind==='copy'?m4Copy(it.file,it.P,t):await m4Transcode(it.file,it.P,t,p=>show(p*0.9),()=>AC.stop);
+      const name=acOutName(it);
+      if(one||dir){
+        if(dir)made=await acFreeName(dir,name);
+        const h=one||await dir.getFileHandle(made,{create:true});
+        w=await h.createWritable();
+        await acWriteParts(w,[...r.head,...r.parts],r.size,p=>show(t.kind==='copy'?p:0.9+p*0.1));
+        await w.close();w=null;made=null;it.saved=h.name;
+      }else{acDownload(r.blob,name);it.saved=name}
+      it.state='done';it.out=r.size;ok++;
+    }catch(e){
+      if(w)try{await w.abort()}catch(x){}
+      /* En halvskrevet fil i den valgte mappe fjernes igen. */
+      if(made)try{await dir.removeEntry(made)}catch(x){}
+      if(AC.stop&&e&&e.name==='AbortError')it.state='ready';
+      else{it.state='err';it.msg=e&&e.message||String(e);fail++;console.warn('Lydkonverter:',it.name,e)}
+    }
+    acRenderRow(it);
+  }
+  AC.busy=false;acRender();
+  const last=todo.find(x=>x.state==='done');
+  $('acMsg').textContent=ok?`${ok===1?'1 fil':ok+' filer'} gemt${dir?' i mappen '+dir.name:''}${fail?` · ${fail} fejlede`:''}`
+    :fail?'Konverteringen fejlede — se rækkerne':AC.stop?'Stoppet':'';
+  if(ok)toast(ok===1?`Gemt: ${last.saved} ✓`:`${ok} M4A-filer gemt ✓`,'ok');
+}
+$('btnAudioConv').onclick=acOpen;
+$('acPick').onclick=()=>$('acInput').click();
+$('acInput').onchange=e=>{acAdd([...e.target.files]);e.target.value=''};
+$('acClose').onclick=()=>{if(AC.busy){AC.stop=true;$('acMsg').textContent='Stopper…'}else acClose()};
+$('acGo').onclick=acGo;
+$('acList').addEventListener('click',e=>{
+  const b=e.target.closest('.acRm');if(!b||AC.busy)return;
+  const id=b.closest('.acRow').dataset.id;AC.items=AC.items.filter(x=>x.id!==id);acRender();$('acPick').focus();
+});
+$('acList').addEventListener('change',e=>{
+  if(!e.target.matches('.acTrk'))return;
+  const it=AC.items.find(x=>x.id===e.target.closest('.acRow').dataset.id);if(!it)return;
+  it.trk=+e.target.value;if(it.state==='err')it.state='ready';
+  acRenderRow(it);acFoot();
+  const s=$('acList').querySelector(`.acRow[data-id="${it.id}"] .acTrk`);if(s)s.focus();
+});
 </script>
 <script>
 /* ================================================================
@@ -4021,8 +4773,25 @@ async function selftest(){
       }
       mp4txt=`mp4 ${dur.toFixed(3)} s = tidslinje ${total.toFixed(3)} s${lydTxt} (${blob.size/1024|0} KB)`;
     }
+    /* Lydkonverteren: testklippets tone som M4A (AAC kopieres, Opus omkodes). */
+    let m4txt='';
+    if(tone){
+      const P=await m4Probe(tone),t=P.tracks[0];
+      if(t&&t.kind==='trans')await acCanTrans(t);
+      if(!t||t.kind==='no')throw new Error('lydkonverteren kan ikke bruge testklippets lyd'+(t?': '+t.why:''));
+      const r=t.kind==='copy'?m4Copy(tone,P,t):await m4Transcode(tone,P,t,()=>{},()=>false);
+      const u=new Uint8Array(await r.blob.arrayBuffer());
+      if(u.length!==r.size||m4Fcc(u,8)!=='M4A ')throw new Error('M4A-filen har forkert størrelse eller filtype');
+      const ab=await new OfflineAudioContext(1,1,48000).decodeAudioData(u.buffer);
+      const c0=ab.getChannelData(0);let q=0;for(let i=ab.sampleRate*0.5|0;i<ab.sampleRate*1.5;i++)q+=c0[i]*c0[i];
+      const rms=Math.sqrt(q/ab.sampleRate);
+      log('m4a',t.name,t.kind,r.size+' B',ab.duration.toFixed(3)+' s','rms '+rms.toFixed(3));
+      if(!(Math.abs(ab.duration-2)<0.1))throw new Error('M4A-filen varer '+ab.duration.toFixed(3)+' s, ikke 2 s');
+      if(!(rms>0.15))throw new Error('M4A-filen er stille (RMS '+rms.toFixed(3)+')');
+      m4txt=` · m4a ${t.kind==='copy'?'kopieret':'omkodet'} ${ab.duration.toFixed(2)} s`;
+    }
     log('DONE ✅');
-    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}`,true);
+    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}`,true);
   }catch(e){console.error('[SELFTEST] FAIL ❌',e);stBadge('SELVTEST FEJL: '+(e&&e.message||e),false)}
 }
 
