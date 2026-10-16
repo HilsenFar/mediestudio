@@ -79,8 +79,9 @@ html,body{height:100%;overflow:hidden}
    under inspektørens uigennemsigtige plade.
    1100px og ikke 980px: værktøjslinjen måler ~1090px med alle knapper, og
    transportrækken er først helt fri (32px-knapper, én linje) når midterkolonnen
-   er ~510px: 270 + 510 + 318 = 1098. Under gulvet panorerer siden i stedet for
-   at klippe værktøjslinjen; desktop-vinduets minWidth følger samme tal. */
+   er ~510px: 270 + 510 + 318 = 1098 (før fartvælgeren; se #transport). Under
+   gulvet panorerer siden i stedet for at klippe værktøjslinjen; desktop-
+   vinduets minWidth følger samme tal. */
 @media (max-width: 1100px){
   html{overflow-x:auto}
   body{min-width:1100px}
@@ -224,7 +225,9 @@ input,select,textarea,button{font:inherit;color:inherit}
 #stageHint{position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;color:var(--faint);pointer-events:none;text-align:center}
 #stageHint .big{font-size:42px;color:var(--gt-ink-4)}
 /* flex-wrap: bliver kolonnen for smal, ombrydes lydstyrken til en ny linje i
-   stedet for at knapperne klemmes (de målte 18px ved layout-gulvet). */
+   stedet for at knapperne klemmes (de målte 18px ved layout-gulvet).
+   Med fartvælgeren (#pvRate) kræver én linje ~550px i midterkolonnen (vindue
+   ~1140px), så lige over gulvet på 1100px står lydstyrken på linje 2. */
 #transport{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;padding:7px 12px;background:var(--panel);border-top:1px solid var(--line)}
 .pbtn{flex:none;background:transparent;border-color:transparent;box-shadow:none;color:var(--txt);width:32px;height:28px;padding:0;font-size:14px}
 .pbtn:hover{background:var(--panel3);border-color:var(--line)}
@@ -232,6 +235,13 @@ input,select,textarea,button{font:inherit;color:inherit}
 #tcur{font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;color:var(--acc2);font-weight:700}
 #ttot{font-family:var(--gt-font-ui);font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;color:var(--faint)}
 #volWrap{display:flex;align-items:center;gap:5px;color:var(--dim)}
+/* Afspilningshastighed: samme felt som sorteringen i biblioteket. Uden for 1×
+   (slowmotion, eller 2×/4× fra L) står den i advarselsfarven, så en fart fra
+   sidst (valget huskes i browseren) ikke ligner en langsom eller hurtig maskine. */
+#pvRate{flex:none;height:26px;background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:0 2px 0 6px;outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,.7);font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1;font-size:12px;cursor:pointer}
+#pvRate:focus{border-color:var(--acc)}
+#pvRate.slow{border-color:var(--gt-warn);color:var(--gt-warn-ink)}
+#pvRate option{color:var(--txt)}
 input[type=range]{-webkit-appearance:none;height:4px;border-radius:var(--gt-r-1);background:var(--gt-edge-hair);outline:none;cursor:pointer}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--acc);border:2px solid var(--gt-sub-0)}
 
@@ -408,6 +418,41 @@ body.focusMode #main{grid-template-columns:1fr}
 .mkRm{flex:none;display:inline-flex;align-items:center;padding:6px 8px;background:none;border:none;color:var(--faint);cursor:pointer;border-radius:var(--gt-r-1)}
 .mkRm:hover{color:var(--err)}
 
+/* ---------- Værktøjer: fremdrift, genveje, hjælpelinjer, fuld skærm ---------- */
+#jobBack,#keysBack{position:fixed;inset:0;background:rgba(5,6,9,.72);display:none;align-items:center;justify-content:center;z-index:65}
+#jobBack.open,#keysBack.open{display:flex}
+#jobBar{height:8px;background:var(--gt-void);border:1px solid var(--line);border-radius:var(--gt-r-1);overflow:hidden;margin:8px 0 6px;box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+#jobFill{height:100%;width:0%;background:linear-gradient(90deg,var(--gt-sig-dk),var(--gt-sig));transition:width .15s var(--gt-ease-soft)}
+#jobTxt{font-size:var(--gt-t-xs);color:var(--dim);font-feature-settings:"tnum" 1}
+#jobWarn{margin-top:10px;font-size:12px;line-height:1.5;color:var(--gt-warn-ink);display:flex;gap:6px;align-items:flex-start}
+#jobWarn .gi{flex:none;margin-top:2px}
+#keysBack .modal{width:520px}
+#keysList{max-height:min(62vh,560px);overflow-y:auto}
+#keysList h3{font-family:var(--gt-font-ui);font-size:var(--gt-t-xs);font-weight:700;text-transform:uppercase;letter-spacing:var(--gt-track-label);color:var(--dim);margin:12px 0 6px}
+#keysList h3:first-child{margin-top:0}
+.kRow{display:flex;gap:12px;align-items:baseline;padding:3px 0;font-size:12.5px;color:var(--dim)}
+.kKey{flex:none;width:160px;font-family:var(--gt-font-mono);font-size:var(--gt-t-xs);color:var(--txt)}
+#btnKeys{flex:none;display:inline-flex;align-items:center;padding:2px 6px;background:none;border:1px solid var(--line);border-radius:var(--gt-r-1);color:var(--faint);cursor:pointer}
+#btnKeys:hover{color:var(--txt);border-color:var(--gt-sig)}
+/* Billedets værktøjshjørne: dæmpet, til musen er over billedet. */
+#stageTools{position:absolute;right:10px;top:8px;display:flex;gap:6px;align-items:center;opacity:.4;transition:opacity var(--gt-d-2) var(--gt-ease-soft);z-index:6}
+#stage:hover #stageTools,#stageTools:focus-within{opacity:1}
+#stageTools .pbtn{background:rgba(5,6,9,.7);border-color:var(--line)}
+#guideSel{font-size:var(--gt-t-xs);background:rgba(5,6,9,.8);border:1px solid var(--line);border-radius:var(--gt-r-2);padding:3px 4px;outline:none;color:var(--dim)}
+#guideSel:focus{border-color:var(--acc)}
+#guideOv{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:3}
+#guideOv svg{position:absolute;inset:0;width:100%;height:100%}
+#guideOv path{stroke:rgba(255,255,255,.45);stroke-width:1;vector-effect:non-scaling-stroke;fill:none}
+.gz{position:absolute;background:rgba(255,43,78,.16)}
+.gzLbl{position:absolute;margin:4px;padding:1px 6px;border-radius:var(--gt-r-1);background:rgba(5,6,9,.75);color:var(--gt-red-ink);font-size:var(--gt-t-xs);white-space:nowrap}
+/* J/K/L: fart og retning, mens der shuttles */
+#jklBadge{position:absolute;left:12px;top:10px;padding:2px 10px;border-radius:var(--gt-r-3);background:rgba(5,6,9,.8);border:1px solid var(--gt-sig);
+  color:var(--acc2);font:700 13px var(--gt-font-ui);font-feature-settings:"tnum" 1;pointer-events:none;z-index:6}
+/* Fundne klipskift (Find klipskift) på mærkesporet */
+.scnLine{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--gt-sig);z-index:3;pointer-events:none}
+#stage:fullscreen{background:#000}
+#stage:fullscreen #cv{max-width:100%;max-height:100%;border-radius:0;box-shadow:none}
+
 /* ---------- Statusbar ---------- */
 #status{grid-row:5;display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-size:var(--gt-t-xs);color:var(--faint);white-space:nowrap;overflow:hidden}
 #status b{color:var(--dim);font-weight:600}
@@ -490,7 +535,7 @@ textarea:focus-visible,
 .preset:focus-visible,.chip:focus-visible,
 .mcard:focus-visible,.subItem:focus-visible,
 .row input:focus-visible,.row select:focus-visible,
-#projName:focus-visible,#tlZoom:focus-visible,#masterVol:focus-visible{
+#projName:focus-visible,#tlZoom:focus-visible,#masterVol:focus-visible,#pvRate:focus-visible{
   outline:none;
   box-shadow:var(--gt-focus-ring);
 }
@@ -586,6 +631,12 @@ textarea:focus-visible,
     <div id="stage">
       <canvas id="cv" width="1080" height="1920"></canvas>
       <div id="mkShow"></div>
+      <div id="guideOv" hidden></div>
+      <div id="jklBadge" hidden></div>
+      <div id="stageTools">
+        <select id="guideSel" title="Hjælpelinjer i preview (kommer ikke med i videoen)" aria-label="Hjælpelinjer"><option value="">Linjer: ingen</option><option value="grid">Tredjedele</option><option value="tiktok">TikTok-zone</option><option value="reels">Reels-zone</option><option value="shorts">Shorts-zone</option></select>
+        <button class="pbtn" id="btnFull" title="Fuld skærm (eller dobbeltklik på billedet)" aria-label="Fuld skærm"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-fit"></use></svg></button>
+      </div>
       <div id="mkOv">
         <canvas id="mkFrz" width="1" height="1"></canvas>
         <div class="mkBox" id="mkBox" hidden></div>
@@ -602,6 +653,7 @@ textarea:focus-visible,
       <button class="pbtn main" id="btnPlay" title="Afspil/pause (Mellemrum)" aria-label="Afspil eller pause"><svg class="gi" aria-hidden="true"><use id="btnPlayIcon" href="icons.svg#gi-play"></use></svg></button>
       <button class="pbtn" id="btnNextF" title="1 billede frem (→)" aria-label="1 billede frem"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-step-fwd"></use></svg></button>
       <button class="pbtn" id="btnEnd" title="Til slut (End)" aria-label="Til slut"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-skip-fwd"></use></svg></button>
+      <select id="pvRate" title="Afspilningshastighed i preview: slowmotion til at finde fejl. Påvirker ikke eksporten" aria-label="Afspilningshastighed"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
       <div class="sep"></div>
       <span id="tcur">00:00.00</span>&nbsp;<span id="ttot">/ 00:00.00</span><span id="tShot" title="Shot under markøren (fra shot-tabellen)" hidden></span>
       <div class="grow"></div>
@@ -673,6 +725,7 @@ textarea:focus-visible,
   <span id="stSnap"></span>
   <span class="grow"></span>
   <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> del · <kbd>T</kbd>/<kbd>U</kbd> tekst · <kbd>M</kbd> mærk · <kbd>←→</kbd> billede · <kbd>Alt+←→</kbd> flyt · <kbd>Ctrl+Z</kbd> fortryd · <kbd>F</kbd> fokus · <kbd>Del</kbd> slet</span>
+  <button id="btnKeys" title="Alle tastaturgenveje (?)" aria-label="Alle tastaturgenveje"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-keyboard"></use></svg></button>
 </div>
 
 <div id="modalBack">
@@ -740,6 +793,24 @@ textarea:focus-visible,
   </div>
 </div>
 
+<div id="jobBack">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="jobTitle">
+    <h2 id="jobTitle">Arbejder…</h2>
+    <div id="jobBar"><div id="jobFill"></div></div>
+    <div id="jobTxt" role="status">Forbereder…</div>
+    <div id="jobWarn"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-warning"></use></svg> Hold vinduet synligt imens. Videoen afspilles i baggrunden for at hente billederne.</div>
+    <div class="btnRow" style="margin-top:14px;justify-content:flex-end;display:flex"><button class="sbtn" id="jobStop">Stop</button></div>
+  </div>
+</div>
+
+<div id="keysBack">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="keysTitle">
+    <h2 id="keysTitle">Tastaturgenveje</h2>
+    <div id="keysList"></div>
+    <div class="btnRow" style="margin-top:14px;justify-content:flex-end;display:flex"><button class="sbtn" id="keysClose">Luk</button></div>
+  </div>
+</div>
+
 <div id="toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 <div id="dropOverlay">Slip filerne her</div>
 <input type="file" id="fileInput" multiple accept="video/*,image/*,audio/*,.mp4,.mov,.m4v,.webm,.mkv,.jpg,.jpeg,.png,.webp,.gif,.mp3,.wav,.m4a,.aac,.ogg,.opus,.flac" style="display:none">
@@ -789,7 +860,10 @@ const isMediaName=n=>VID_EXT.test(n)||IMG_EXT.test(n)||AUD_EXT.test(n);
 const kindOfName=n=>VID_EXT.test(n)?'video':AUD_EXT.test(n)?'audio':'image';
 
 /* ---------- Tilstand ---------- */
-const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0};
+/* Farvekorrektion (CSS-filtre) og looks (efterbehandling, se lk* i
+   kompositoren): glød, korn, vignet, RGB-split og VHS 0-1; spejl 0 = intet,
+   1 = vandret, 2 = lodret, 3 = kalejdoskop. Gamle projekter uden looks får 0. */
+const FXDEF={bright:1,contrast:1,sat:1,hue:0,blur:0,gray:0,sepia:0,invert:0,glow:0,grain:0,vignette:0,rgb:0,vhs:0,mirror:0};
 /* Ken Burns: zoom zs→ze og pan fra (pxs,pys) til (pxe,pye), begge i andele
    af den halve overflade der rager ud. Gamle projekter havde et symmetrisk
    px/py (= pxs:px, pxe:-px), som applyProject omregner. */
@@ -800,7 +874,9 @@ const S={
   texts:[],            // {id,text,start,dur,x,y,size,color,font,bold,outline,oColor,bg,bgColor,align,fade}
   subs:[],             // {id,start,dur,text}
   subStyle:{size:44,color:'#ffffff',oColor:'#000000',outline:5,margin:7,bg:false,pos:'bund'},
-  proj:{w:1080,h:1920,fps:30,bg:'#000000'},
+  /* bar: fremdriftslinje {color,pos:'bund'|'top',h} eller null — altid til
+     stede, så fortryd (Object.assign) også kan slå den fra igen. */
+  proj:{w:1080,h:1920,fps:30,bg:'#000000',bar:null},
   /* Ét musikspor: {fid,start,in,volume,fadeIn,fadeOut,fileDur,grid,pulse,missing?}
      start = hvor på tidslinjen filen begynder at lyde, in = hvor i filen.
      Med i fortryd-historikken (snap), autosave, projektfil og genforbindelse. */
@@ -928,7 +1004,7 @@ async function addMediaFiles(files,opts){
       const old=S.files.find(x=>x.name===f.name&&x.src&&x.src===opts.dir);
       if(!old)continue;
       try{URL.revokeObjectURL(old.url)}catch(e){}
-      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null,fps:null,fpsP:null});
+      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null,fps:null,fpsP:null,visB:null,visP:null});
       for(const v of[vA,vB])if(v._fid===old.id){v._fid=null;v._cid=null}
       replaced.push(old);
     }
@@ -1236,7 +1312,8 @@ function fxFilter(fx,k){
   if(fx.invert)p.push(`invert(${fx.invert})`);
   return p.length?p.join(' '):'none';
 }
-const hasFx=fx=>fxFilter(fx)!=='none';
+const lkOn=fx=>!!(fx&&(fx.glow>0||fx.grain>0||fx.vignette>0||fx.rgb>0||fx.vhs>0||fx.mirror>0));
+const hasFx=fx=>fxFilter(fx)!=='none'||lkOn(fx);
 function fadeGain(c,local){
   const d=clipDur(c);let g=1;
   if(c.fadeIn>0&&local<c.fadeIn)g=Math.min(g,local/c.fadeIn);
@@ -1304,9 +1381,191 @@ function drawBlurBg(c2,src,sw,sh,W,H,alpha,filter){
 /* ---------- Klipskift-effekter og puls på slag ----------
    Regnes ud fra klippets lokale tid og tidslinjetiden alene, så preview,
    MP4 og WebM tegner præcis det samme. */
-const CUT_FX={flash:'Hvidt blink',punch:'Zoom-stød',black:'Sort blink'};
+const CUT_FX={flash:'Hvidt blink',punch:'Zoom-stød',black:'Sort blink',zoom:'Zoom ind',shake:'Rystelse',whip:'Pisk',glitch:'Glitch'};
 const CUT_FX_DUR=0.12;
-function cutFxScale(c,local){return c.cutFx==='punch'?1+0.08*Math.max(0,1-local/0.18):1}
+/* De bevægede skift (zoom ind, rystelse, pisk, glitch) varer lidt længere og
+   blinker aldrig: de skalerer, flytter og forskyder billedet. cutE går fra 1
+   til 0 over effektens varighed. */
+const CUT_MOVE_DUR={zoom:0.3,shake:0.35,whip:0.22,glitch:0.3};
+const cutE=(c,local)=>{const d=CUT_MOVE_DUR[c.cutFx];return d&&local<d?1-local/d:0};
+function cutFxScale(c,local){
+  if(c.cutFx==='punch')return 1+0.08*Math.max(0,1-local/0.18);
+  if(c.cutFx==='zoom'){const e=cutE(c,local);return 1+0.3*e*e}
+  return 1;
+}
+/* Forskydning i andele af lærredets bredde og højde. */
+function cutFxOffset(c,local){
+  const e=cutE(c,local);if(!e)return null;
+  if(c.cutFx==='shake')return{x:0.025*e*Math.sin(local*95),y:0.02*e*Math.cos(local*71),cover:true};
+  if(c.cutFx==='whip')return{x:0.6*e*e*e,y:0};
+  return null;
+}
+/* Bevægelsesuskarphed i px ved 1080 (skaleres med lærredet). */
+function cutFxBlur(c,local){const e=cutE(c,local);return c.cutFx==='zoom'?6*e*e:c.cutFx==='whip'?12*e:0}
+/* Tid siden seneste slag (s) og slagets nummer — kun hvor musikken lyder. */
+function beatPh(t){
+  const m=S.music,g=gridOf();
+  if(!g||m.missing||t<m.start||t>musicEndT())return null;
+  const x=beatIdx(t),k=Math.floor(x);
+  return{k,ph:(x-k)*60/g.bpm};
+}
+/* Rystelse på slag (musikkens shake 0-1): et stød i en tilfældig men fast
+   retning på hvert slag, der klinger af på 80 ms. Glitch på slag: RGB-split
+   og forskudte striber der klinger af på 100 ms. Ingen af dem blinker. */
+function beatShake(t){
+  const m=S.music;if(!m||!(m.shake>0))return null;
+  const b=beatPh(t);if(!b)return null;
+  const a=m.shake*0.03*Math.exp(-b.ph/0.08),ang=lkHash(b.k*7919+13)*Math.PI*2;
+  return{x:Math.cos(ang)*a,y:Math.sin(ang)*a,cover:true};
+}
+function beatGlitch(t){const m=S.music;if(!m||!(m.glitch>0))return 0;const b=beatPh(t);return b?m.glitch*Math.exp(-b.ph/0.1):0}
+/* ---------- Looks (efterbehandling af klippets lag) ----------
+   Tegnes oven på klippet og under tekster, og alt er en funktion af lærred,
+   styrke og tid, så preview og eksport giver det samme billede. Ingen
+   lysblink: korn og VHS-støj bevæger sig, de blinker ikke. Bufferne findes
+   pr. lærredsstørrelse, fordi WebM-eksporten tegner to størrelser pr. billede. */
+const LK={bufs:new Map(),noise:null,scan:null};
+function lkBuf(W,H){
+  const k=W+'x'+H;let b=LK.bufs.get(k);
+  if(!b){
+    if(LK.bufs.size>=3)LK.bufs.delete(LK.bufs.keys().next().value);
+    const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+    b={a:mk(W,H),b:mk(W,H),s:mk(Math.max(2,W>>3),Math.max(2,H>>3))};
+    b.ax=b.a.getContext('2d');b.bx=b.b.getContext('2d');b.sx=b.s.getContext('2d');
+    LK.bufs.set(k,b);
+  }
+  return b;
+}
+/* Fast pseudo-tilfældighed ud fra et heltal (samme billede i preview og eksport). */
+const lkHash=n=>{n=Math.imul(n^n>>>16,0x45d9f3b);n=Math.imul(n^n>>>16,0x45d9f3b);return((n^n>>>16)>>>0)/4294967296};
+function lkNoise(){
+  if(LK.noise)return LK.noise;
+  LK.noise=[];
+  for(let k=0;k<4;k++){
+    const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d'),im=g.createImageData(256,256);
+    for(let i=0;i<im.data.length;i+=4){const v=Math.round(128+(lkHash(i*7+k*99991)-0.5)*255);im.data[i]=im.data[i+1]=im.data[i+2]=v;im.data[i+3]=255}
+    g.putImageData(im,0,0);LK.noise.push(c);
+  }
+  return LK.noise;
+}
+function lkScan(){
+  if(LK.scan)return LK.scan;
+  const c=document.createElement('canvas');c.width=4;c.height=4;const g=c.getContext('2d');
+  g.fillStyle='#000';g.fillRect(0,2,4,1);
+  return LK.scan=c;
+}
+const lkCopy=(B,c2)=>{B.ax.globalCompositeOperation='copy';B.ax.drawImage(c2.canvas,0,0);B.ax.globalCompositeOperation='source-over'};
+/* Spejl: 1 = venstre halvdel spejlet til højre, 2 = top til bund, 3 = kalejdoskop (øverste venstre kvart i alle fire). */
+function lkMirror(c2,W,H,mode,B){
+  lkCopy(B,c2);
+  const A=B.a,w2=W/2,h2=H/2;
+  c2.save();
+  if(mode===1){c2.translate(W,0);c2.scale(-1,1);c2.drawImage(A,0,0,w2,H,0,0,w2,H)}
+  else if(mode===2){c2.translate(0,H);c2.scale(1,-1);c2.drawImage(A,0,0,W,h2,0,0,W,h2)}
+  else for(const[sx,sy]of[[-1,1],[1,-1],[-1,-1]]){c2.save();c2.translate(sx<0?W:0,sy<0?H:0);c2.scale(sx,sy);c2.drawImage(A,0,0,w2,h2,0,0,w2,h2);c2.restore()}
+  c2.restore();
+}
+/* RGB-split: kanalerne isoleres med 'multiply' og lægges forskudt sammen med 'lighter'. */
+function lkRgb(c2,W,H,amt,B){
+  const off=amt*W*0.012;if(off<0.4)return;
+  lkCopy(B,c2);
+  c2.save();c2.globalCompositeOperation='copy';c2.fillStyle='#000';c2.fillRect(0,0,W,H);c2.globalCompositeOperation='lighter';
+  for(const[col,dx]of[['#ff0000',-off],['#00ff00',0],['#0000ff',off]]){
+    const b=B.bx;b.globalCompositeOperation='copy';b.drawImage(B.a,0,0);b.globalCompositeOperation='multiply';b.fillStyle=col;b.fillRect(0,0,W,H);
+    c2.drawImage(B.b,dx,0);
+  }
+  c2.restore();
+}
+/* Glitch-striber: nogle vandrette bånd forskydes; nyt mønster 30 gange i sekundet. */
+function lkSlices(c2,W,H,amt,t,B){
+  lkCopy(B,c2);
+  const n=Math.floor(t*30);
+  for(let i=0;i<5;i++){
+    const y=lkHash(n*31+i)*H,h=Math.max(2,H*(0.02+0.06*lkHash(n*17+i))),dx=(lkHash(n*13+i*7)-0.5)*W*0.08*amt;
+    c2.drawImage(B.a,0,y,W,h,dx,y,W,h);
+  }
+}
+/* Glød: lille sløret, lysnet kopi lagt på med 'screen'. */
+function lkGlow(c2,W,H,amt,B){
+  const s=B.sx,w=B.s.width,h=B.s.height;
+  s.filter='blur(3px) brightness(1.35) saturate(1.2)';s.globalCompositeOperation='copy';s.drawImage(c2.canvas,0,0,w,h);s.filter='none';
+  c2.save();c2.globalCompositeOperation='screen';c2.globalAlpha=clamp(amt,0,1)*0.9;c2.imageSmoothingEnabled=true;c2.drawImage(B.s,0,0,W,H);c2.restore();
+}
+function lkVignette(c2,W,H,amt){
+  const r=Math.hypot(W,H)/2,gr=c2.createRadialGradient(W/2,H/2,r*0.35,W/2,H/2,r);
+  gr.addColorStop(0,'rgba(0,0,0,0)');gr.addColorStop(1,`rgba(0,0,0,${(clamp(amt,0,1)*0.88).toFixed(3)})`);
+  c2.save();c2.fillStyle=gr;c2.fillRect(0,0,W,H);c2.restore();
+}
+/* Korn: fire støjfliser skifter 24 gange i sekundet, forskudt pseudo-tilfældigt. */
+function lkGrain(c2,W,H,amt,t){
+  const n=Math.floor(t*24),tile=lkNoise()[n&3],p=c2.createPattern(tile,'repeat');
+  p.setTransform(new DOMMatrix().translate(lkHash(n)*256,lkHash(n+7)*256).scale(Math.max(1,Math.min(W,H)/720)));
+  c2.save();c2.globalCompositeOperation='overlay';c2.globalAlpha=clamp(amt,0,1)*0.55;c2.fillStyle=p;c2.fillRect(0,0,W,H);c2.restore();
+}
+/* VHS: lidt farveforskydning, et bånd der glider ned over billedet (4 s pr.
+   tur) og forskyder linjerne, scanlinjer og dæmpet korn. */
+function lkVhs(c2,W,H,amt,t,B){
+  lkRgb(c2,W,H,amt*0.35,B);
+  const bh=Math.max(4,H*0.06),by=((t/4)%1)*(H+bh)-bh;
+  lkCopy(B,c2);
+  for(let i=0;i<6;i++){const y=by+i*bh/6,dx=(lkHash(Math.floor(t*12)*13+i)-0.5)*W*0.03*amt;c2.drawImage(B.a,0,y,W,bh/6,dx,y,W,bh/6)}
+  const p=c2.createPattern(lkScan(),'repeat');p.setTransform(new DOMMatrix().scale(Math.max(1,Math.round(H/540))));
+  c2.save();c2.globalAlpha=0.28*amt;c2.fillStyle=p;c2.fillRect(0,0,W,H);c2.restore();
+  lkGrain(c2,W,H,amt*0.5,t);
+}
+/* Alle looks for et klip (glitch = ekstra fra skiftet eller slaget). */
+function lkApply(c2,W,H,fx,t,glitch){
+  const mir=Math.round(clamp(fx.mirror||0,0,3)),rgb=clamp((fx.rgb||0)+glitch,0,1.5);
+  const glow=clamp(fx.glow||0,0,1),vhs=clamp(fx.vhs||0,0,1),vig=clamp(fx.vignette||0,0,1),grain=clamp(fx.grain||0,0,1);
+  if(!(mir||rgb>0||glow>0||vhs>0||vig>0||grain>0))return;
+  const B=lkBuf(W,H);
+  if(mir)lkMirror(c2,W,H,mir,B);
+  if(glitch>0.02)lkSlices(c2,W,H,glitch,t,B);
+  if(rgb>0)lkRgb(c2,W,H,rgb,B);
+  if(glow>0)lkGlow(c2,W,H,glow,B);
+  if(vhs>0)lkVhs(c2,W,H,vhs,t,B);
+  if(vig>0)lkVignette(c2,W,H,vig);
+  if(grain>0)lkGrain(c2,W,H,grain,t);
+}
+/* ---------- Lydvisualisering ----------
+   Tegnes ud fra musikkens frekvensbånd (visBands: 48 bånd pr. 1/60 s, regnet
+   én gang fra den afkodede fil), så preview og eksport er ens. */
+const VIS_RATE=60,VIS_NB=48;
+const VIS_COLORS={neon:['#19E0FF','#FF2BD6'],cyan:['#19E0FF','#5FEBFF'],ravgul:['#FF8A1F','#FFD27A'],hvid:['#FFFFFF','#C9D3E3']};
+function visDraw(c2,W,H,bands,ft,o){
+  const n=bands.length/VIS_NB;if(!n)return;
+  const f=clamp(Math.round(ft*VIS_RATE),0,n-1),Bd=bands.subarray(f*VIS_NB,f*VIS_NB+VIS_NB);
+  const sz=clamp(o.size||0.25,0.05,0.6),pos=o.pos||'bund',st=o.style||'bars',col=VIS_COLORS[o.color]||VIS_COLORS.neon;
+  const grad=(x0,y0,x1,y1)=>{const g=c2.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,col[0]);g.addColorStop(1,col[1]);return g};
+  c2.save();c2.globalAlpha=clamp(o.opacity==null?0.9:o.opacity,0,1);
+  if(st==='circle'){
+    const cx=W/2,cy=pos==='top'?H*0.3:pos==='midt'?H/2:H*0.7,r0=Math.min(W,H)*0.16,len=Math.min(W,H)*sz*0.9;
+    c2.translate(cx,cy);c2.lineCap='round';c2.lineWidth=Math.max(2,Math.min(W,H)*0.008);
+    c2.strokeStyle=grad(-r0-len,0,r0+len,0);c2.beginPath();
+    for(let i=0;i<VIS_NB*2;i++){
+      const b=Bd[i<VIS_NB?i:VIS_NB*2-1-i]/255,a=i/(VIS_NB*2)*Math.PI*2-Math.PI/2,r1=r0+2,r2=r0+2+b*len;
+      c2.moveTo(Math.cos(a)*r1,Math.sin(a)*r1);c2.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+    }
+    c2.stroke();
+  }else{
+    const h=H*sz,gap=Math.max(1,W*0.0025),bw=(W*0.9-gap*(VIS_NB-1))/VIS_NB,x0=W*0.05;
+    const yb=pos==='top'?h:pos==='midt'?H/2:H*0.97;
+    c2.fillStyle=grad(0,yb,0,yb-h);
+    for(let i=0;i<VIS_NB;i++){
+      const bh=Math.max(2,Bd[i]/255*h),x=x0+i*(bw+gap);
+      if(st==='mirror')c2.fillRect(x,(pos==='bund'?yb-h/2:yb)-bh/2,bw,bh);
+      else if(pos==='top')c2.fillRect(x,0,bw,bh);
+      else c2.fillRect(x,yb-bh,bw,bh);
+    }
+  }
+  c2.restore();
+}
+/* ---------- Tekst-animationer ----------
+   Ind-animationen fylder de første 0,45 s (højst halvdelen af teksten);
+   skrivemaskine og ord for ord bruger længere tid. Fade ud følger fade-valget. */
+const TX_ANIM={'':'Ingen',pop:'Pop',op:'Glid op',ned:'Glid ned',zoom:'Zoom ud',hop:'Hop',skriv:'Skrivemaskine',ord:'Ord for ord'};
+const easeOut=e=>1-Math.pow(1-e,3);
+const easeBack=e=>{const s=1.70158;e-=1;return e*e*((s+1)*e+s)+1};
 /* Skala-puls der toppes på hvert slag og klinger af (tidskonstant 90 ms),
    kun hvor musikken lyder. */
 function pulseScale(t){
@@ -1339,9 +1598,14 @@ function clipPlace(ca,t,sw,sh,W,H){
     ox=lerp(k.pxs||0,k.pxe||0,p)*Math.max(0,overW)/2;
     oy=lerp(k.pys||0,k.pye||0,p)*Math.max(0,overH)/2;
   }
+  /* Rystelse (skift eller slag) og pisk flytter billedet; en rystelse zoomer
+     samtidig lidt ind, så kanterne ikke kommer til syne. */
+  const m1=ca.i>0?cutFxOffset(c,ca.local):null,m2=beatShake(t);
+  let mx=0,my=0,zoom=1;
+  for(const m of[m1,m2])if(m){mx+=m.x;my+=m.y;if(m.cover)zoom=Math.max(zoom,1+2*Math.max(Math.abs(m.x),Math.abs(m.y)))}
   /* Zoom-stød og puls skalerer billedet om midten (panoreringen med). */
-  const dw=sw*scale*bump,dh=sh*scale*bump;ox*=bump;oy*=bump;
-  return{x:(W-dw)/2+ox,y:(H-dh)/2+oy,w:dw,h:dh};
+  const dw=sw*scale*bump*zoom,dh=sh*scale*bump*zoom;ox*=bump*zoom;oy*=bump*zoom;
+  return{x:(W-dw)/2+ox+mx*W,y:(H-dh)/2+oy+my*H,w:dw,h:dh};
 }
 function drawFrame(t,c2,opts){
   opts=opts||{};
@@ -1371,12 +1635,19 @@ function drawFrame(t,c2,opts){
       const r=clipPlace(ca,t,sw,sh,W,H);
       c2.save();
       c2.filter=fxFilter(c.fx,bFac);
+      /* Zoom ind og pisk: bevægelsesuskarphed de første brøkdele af et sekund. */
+      const mb=ca.i>0?cutFxBlur(c,ca.local)*Math.min(W,H)/1080:0;
+      if(mb>0.3)c2.filter=(c2.filter==='none'?'':c2.filter+' ')+`blur(${mb.toFixed(2)}px)`;
       c2.globalAlpha=fadeGain(c,ca.local);
       try{c2.drawImage(src,r.x,r.y,r.w,r.h)}catch(e){}
       c2.restore();
+      lkApply(c2,W,H,c.fx,t,(ca.i>0&&c.cutFx==='glitch'?cutE(c,ca.local):0)+beatGlitch(t));
     }
   }
   if(ca&&ca.c&&ca.i>0)drawCutFx(c2,ca.c,ca.local,W,H);
+  /* Lydvisualisering (over billedet, under tekster) */
+  const m=S.music;
+  if(m&&m.vis&&!m.missing&&t>=m.start&&t<=musicEndT()){const it=musicFile();if(it&&it.visB)visDraw(c2,W,H,it.visB,t-m.start+m.in,m.vis)}
   /* Tekst-overlays */
   for(const tx of S.texts){
     if(t<tx.start||t>tx.start+tx.dur)continue;
@@ -1385,23 +1656,49 @@ function drawFrame(t,c2,opts){
       const f=0.3,lo=t-tx.start,re=tx.start+tx.dur-t;
       a=clamp(Math.min(lo/f,re/f,1),0,1);
     }
-    const size=tx.size*sFac;
+    const size=tx.size*sFac,lo=t-tx.start,an=tx.anim||'';
+    /* Ind-animation: e går fra 0 til 1 over de første 0,45 s. */
+    const ad=Math.min(0.45,tx.dur/2),e=an&&lo<ad?clamp(lo/ad,0,1):1;
+    let sc=1,dy=0;
+    if(e<1){
+      if(an==='pop'){sc=Math.max(0.01,easeBack(e));a*=clamp(e*3,0,1)}
+      else if(an==='op'){dy=(1-easeOut(e))*0.06;a*=e}
+      else if(an==='ned'){dy=-(1-easeOut(e))*0.06;a*=e}
+      else if(an==='zoom'){sc=1+(1-easeOut(e))*1.2;a*=e}
+      else if(an==='hop'){dy=-Math.abs(Math.sin(e*Math.PI*2.5))*(1-e)*0.06;a*=clamp(e*4,0,1)}
+    }
     c2.save();
     c2.globalAlpha=a;
     c2.font=`${tx.bold?'700':'400'} ${size}px ${tx.font}`;
     c2.textAlign=tx.align;c2.textBaseline='middle';
     const maxW=W*0.92,lines=wrapText(c2,tx.text,maxW),lh=size*1.22;
-    const cx=W*tx.x/100,cy=H*tx.y/100,totH=lines.length*lh;
+    const cx=W*tx.x/100,cy=H*(tx.y/100+dy),totH=lines.length*lh;
+    if(sc!==1){c2.translate(cx,cy);c2.scale(sc,sc);c2.translate(-cx,-cy)}
     if(tx.bg){
       c2.save();c2.globalAlpha=a*0.62;c2.fillStyle=tx.bgColor;
       let bw=0;for(const l of lines)bw=Math.max(bw,c2.measureText(l).width);
       const bx=tx.align==='left'?cx:tx.align==='right'?cx-bw:cx-bw/2;
       c2.beginPath();c2.roundRect(bx-size*0.4,cy-totH/2-size*0.22,bw+size*0.8,totH+size*0.44,size*0.2);c2.fill();c2.restore();
     }
+    /* Neon-glød: tekstens egen farve som skygge */
+    if(tx.glow>0){c2.shadowColor=tx.color;c2.shadowBlur=clamp(tx.glow,0,1)*size*0.7}
+    /* Skrivemaskine (tegn) og ord for ord (ord): hvor meget der vises. Linjerne
+       brydes ud fra hele teksten, og den viste del står hvor den skal ende. */
+    let left=Infinity;
+    if(an==='skriv'){const n=tx.text.length,T=Math.min(tx.dur*0.7,n*0.06);left=Math.floor(n*clamp(lo/Math.max(0.05,T),0,1))}
+    else if(an==='ord'){const n=tx.text.split(/\s+/).filter(Boolean).length,T=Math.min(tx.dur*0.8,n*0.32);left=Math.ceil(n*clamp(lo/Math.max(0.05,T),0,1))}
     lines.forEach((l,i)=>{
       const y=cy-totH/2+lh*(i+0.5);
-      if(tx.outline>0){c2.strokeStyle=tx.oColor;c2.lineWidth=tx.outline*sFac;c2.lineJoin='round';c2.strokeText(l,cx,y)}
-      c2.fillStyle=tx.color;c2.fillText(l,cx,y);
+      let s=l,x=cx;
+      if(left!==Infinity){
+        if(left<=0)return;
+        if(an==='skriv'){s=l.slice(0,left);left-=l.length+1}
+        else{const w=l.split(' ').filter(Boolean);s=w.slice(0,left).join(' ');left-=w.length}
+        if(s!==l){const fw=c2.measureText(l).width;x=tx.align==='left'?cx:tx.align==='right'?cx-fw:cx-fw/2;c2.textAlign='left'}
+      }
+      if(tx.outline>0){c2.strokeStyle=tx.oColor;c2.lineWidth=tx.outline*sFac;c2.lineJoin='round';c2.strokeText(s,x,y)}
+      c2.fillStyle=tx.color;c2.fillText(s,x,y);
+      c2.textAlign=tx.align;
     });
     c2.restore();
   }
@@ -1426,6 +1723,13 @@ function drawFrame(t,c2,opts){
     });
     c2.restore();
   }
+  /* Fremdriftslinje: hvor langt videoen er nået. */
+  const pb=S.proj.bar,tot=pb?totalDur():0;
+  if(pb&&tot>0){
+    const h=Math.max(2,Math.round(Math.min(W,H)*0.008*clamp(pb.h||1,0.5,4))),y=pb.pos==='top'?0:H-h;
+    c2.fillStyle='rgba(0,0,0,.35)';c2.fillRect(0,y,W,h);
+    c2.fillStyle=pb.color||'#19E0FF';c2.fillRect(0,y,W*clamp(t/tot,0,1),h);
+  }
   c2.restore();
 }
 
@@ -1440,6 +1744,19 @@ const vA=document.createElement('video'),vB=document.createElement('video');
 for(const v of[vA,vB]){v.preload='auto';v.crossOrigin='anonymous';v.playsInline=true;v._fid=null;v.preservesPitch=false;v.webkitPreservesPitch=false}
 let webmCtx=null;   /* sat under WebM-eksport i anden størrelse end projektet */
 let webmRec=false;  /* WebM-optagelse kører (musik-uret følger render-tiden) */
+/* Afspilningshastighed i preview (1×, 0,5×, 0,25×) til at gennemgå AI-videoer
+   i slowmotion. Den ganges på begge ure: uden musik på videoelementets
+   playbackRate (klippets hastighed × fart, og S.t følger elementet), med musik
+   på musik-uret (S.t = t0 + lydens tid × fart, og musikken spilles med samme
+   playbackRate). Billedklip går dt × fart. Tonehøjden falder med farten som på
+   et bånd i begge ure (preservesPitch=false ovenfor; Web Audio kan ikke andet).
+   Farten hører ikke til projektet: den huskes kun i localStorage. WebM-
+   optagelsen kører gennem preview-motoren og går derfor altid 1×; MP4 har sin
+   egen motor og ser aldrig farten. 2× og 4× er til at spole frem med L
+   (J/K/L, se VÆRKTØJER) og kan også vælges i listen. */
+const PV_RATES=[0.25,0.5,1,2,4];
+let pvRateSel=1;
+const pvRate=()=>webmRec?1:pvRateSel;
 let vActive=vA,vNext=vB,curIdx=-1,lastWall=0,needsDraw=true,seekBusy=false,seekPend=null,seekGuard=null;
 function invalidate(){needsDraw=true}
 function vidElFor(c){return vActive._cid===c.id?vActive:(vNext._cid===c.id?vNext:vActive)}
@@ -1449,7 +1766,7 @@ function prepEl(el,c,local){
   let changed=false;
   if(el._fid!==it.id){el.src=it.url;el._fid=it.id;changed=true}
   el._cid=c.id;
-  el.playbackRate=clamp(c.speed,0.0625,16);
+  el.playbackRate=clamp(c.speed*pvRate(),0.0625,16);
   const target=clamp(c.in+(local||0)*c.speed,0,Math.max(0,(it.dur||0)-0.001));
   try{el.currentTime=target}catch(e){}
   return changed;
@@ -1493,7 +1810,7 @@ async function startClip(i,local){
        hastighedsjusteringen i musicTick. */
     const it=fileOf(c);
     if(pre&&it&&vActive._fid===it.id&&(local||0)*c.speed<0.25&&Math.abs(vActive.currentTime-c.in)<0.05){
-      vActive._cid=c.id;vActive.playbackRate=clamp(c.speed,0.0625,16);
+      vActive._cid=c.id;vActive.playbackRate=clamp(c.speed*pvRate(),0.0625,16);
     }else prepEl(vActive,c,local);
     vActive._corr=null;
     vActive.muted=false;
@@ -1548,7 +1865,8 @@ function seekTo(t,keepPlaying){
    springes ved store afvigelser). Så kan musikken ikke glide fra billedet,
    uanset hvor mange klipskift der er, og klipskift giver ingen hak i lyden.
    ================================================================ */
-const MUS={on:false,src:null,gain:null,bus:null,t0:0,ctx0:0,when:0,from:0};
+/* rate: den fart uret blev forankret med (pvRate() ved musicStart). */
+const MUS={on:false,src:null,gain:null,bus:null,t0:0,ctx0:0,when:0,from:0,rate:1};
 const musicFile=()=>S.music&&!S.music.missing&&S.music.fid?fileOf(S.music):null;
 /* Filens længde: den afkodede, ellers den der blev gemt med projektet. */
 function musicFileDur(){const m=S.music;if(!m)return 0;const it=musicFile();return it&&it.dur>0?it.dur:(m.fileDur||0)}
@@ -1565,13 +1883,15 @@ function musicGainAt(m,t,end){
   return clamp(g,0,1)*clamp(m.volume,0,1);
 }
 /* Samme kurve i preview og MP4: 100 punkter i sekundet som eneste
-   automations-hændelse på gain-noden (kurver må ikke overlappe andre). */
-function applyMusicGain(param,m,from,end,when){
+   automations-hændelse på gain-noden (kurver må ikke overlappe andre).
+   rate: previewets afspilningshastighed; kurven varer dur/rate i lydens tid.
+   MP4 kalder uden (1×). */
+function applyMusicGain(param,m,from,end,when,rate){
   const dur=end-from;
   if(!(m.fadeIn>0||m.fadeOut>0)||!(dur>0)){param.value=musicGainAt(m,from,end);return}
   const N=Math.max(2,Math.ceil(dur*100)+1),curve=new Float32Array(N);
   for(let k=0;k<N;k++)curve[k]=musicGainAt(m,from+dur*k/(N-1),end);
-  param.setValueCurveAtTime(curve,when,dur);
+  param.setValueCurveAtTime(curve,when,dur/(rate||1));
 }
 function ensureMusicBuf(){
   const it=musicFile();
@@ -1593,11 +1913,13 @@ function setMusicFromFile(it){
   if(S.music&&S.music.fid===it.id){select('music',null);return}
   const old=S.music;
   /* En ny sang får nyt ind-punkt og intet beat-grid; placering, lydstyrke og fades bevares. */
-  S.music={fid:it.id,start:old?old.start:0,in:0,volume:old?old.volume:1,fadeIn:old?old.fadeIn:0,fadeOut:old?old.fadeOut:0,fileDur:it.dur,grid:null,pulse:0};
+  S.music={fid:it.id,start:old?old.start:0,in:0,volume:old?old.volume:1,fadeIn:old?old.fadeIn:0,fadeOut:old?old.fadeOut:0,fileDur:it.dur,grid:null,pulse:0,
+    shake:old?old.shake||0:0,glitch:old?old.glitch||0:0,vis:old&&old.vis?{...old.vis}:null};
   freeMusicBufs();
   if(S.playing)pause();
   ensureMusicBuf();
   select('music',null);renderTL();renderBin();markDirty(old?'skift musik':'tilføj musik');
+  if(S.music.vis&&typeof visEnsure==='function')visEnsure();
   toast(`Musik: ${it.name}`,'ok');
 }
 /* Afkodede lydfiler fylder ~90 MB for 4 min stereo: kun musikken (og evt.
@@ -1783,12 +2105,14 @@ function musicStart(){
   if(ac.state!=='running'){ac.resume().then(()=>{if(S.playing&&!MUS.on&&ac.state==='running')musicStart()}).catch(()=>{});return}
   if(!MUS.bus){MUS.bus=ac.createGain();MUS.bus.connect(g.master)}
   MUS.bus.gain.value=S.masterVol;
-  const m=S.music,end=musicEndT();
-  MUS.t0=S.t;MUS.ctx0=ac.currentTime+0.05;MUS.on=true;
+  const m=S.music,end=musicEndT(),rate=pvRate();
+  MUS.t0=S.t;MUS.ctx0=ac.currentTime+0.05;MUS.rate=rate;MUS.on=true;
   if(!(end>S.t+0.005))return;   /* uret kører, men musikken er slut */
-  const from=Math.max(S.t,m.start),when=MUS.ctx0+(from-S.t);
-  const src=ac.createBufferSource();src.buffer=it.abuf;
-  const gn=ac.createGain();applyMusicGain(gn.gain,m,from,end,when);
+  /* I slowmotion ligger musikkens start (from−S.t)/fart ude i lydens tid.
+     start()'s længde er i filens tid og påvirkes ikke af playbackRate. */
+  const from=Math.max(S.t,m.start),when=MUS.ctx0+(from-S.t)/rate;
+  const src=ac.createBufferSource();src.buffer=it.abuf;src.playbackRate.value=rate;
+  const gn=ac.createGain();applyMusicGain(gn.gain,m,from,end,when,rate);
   src.connect(gn).connect(MUS.bus);
   src.start(when,m.in+(from-m.start),end-from);
   MUS.src=src;MUS.gain=gn;MUS.when=when;MUS.from=from;
@@ -1798,7 +2122,9 @@ function musicStart(){
 let musRestartT=0;
 function musicChanged(){clearTimeout(musRestartT);if(S.playing)musRestartT=setTimeout(()=>{if(S.playing)musicStart()},150)}
 /* Ét billede med musik-uret: S.t fra lyden, klipskift fra S.t, videoen
-   holdes på S.t (hastighed ±25 % under 0,3 s afvigelse, ellers spring). */
+   holdes på S.t (hastighed ±25 % under 0,3 s afvigelse, ellers spring).
+   I slowmotion går uret lydens tid × MUS.rate, og videoens grundfart er
+   klippets hastighed × MUS.rate; afvigelserne måles stadig i filens tid. */
 let SEEK_LAT=0.15,WEBM_LAT=0;
 function musicTick(){
   /* Under WebM-optagelse følger uret render-tiden (det MediaStreamDestination
@@ -1811,7 +2137,7 @@ function musicTick(){
   /* Før lyden er nået ud (første afspilning åbner lydenheden, det kan tage
      et øjeblik) står uret stille — og billedet venter på det. */
   const waiting=now<MUS.ctx0;
-  S.t=Math.min(tot,MUS.t0+Math.max(0,now-MUS.ctx0));
+  S.t=Math.min(tot,MUS.t0+Math.max(0,now-MUS.ctx0)*MUS.rate);
   if(S.t>=tot-1e-4){pause();S.t=tot;return}
   const ca=clipAt(S.t);if(!ca)return;
   if(ca.i!==curIdx){startClip(ca.i,ca.local);return}
@@ -1821,7 +2147,7 @@ function musicTick(){
   if(waiting){if(!el.paused)el.pause();return}
   if(el.paused&&!el.ended&&!el._playReq){el._playReq=true;el.play().catch(()=>{}).finally(()=>{el._playReq=false})}
   if(el.seeking||el.readyState<2)return;
-  const want=c.in+ca.local*c.speed,dr=el.currentTime-want;
+  const sp=c.speed*MUS.rate,want=c.in+ca.local*c.speed,dr=el.currentTime-want;
   /* Søgningens varighed måles (glidende gennemsnit), og en rettelse sigter
      så langt frem, så den ikke lander forældet og udløser en ny søgning i
      det uendelige (lange GOP'er, 4K: 1,5-4 s pr. søgning). Højst tre
@@ -1830,11 +2156,11 @@ function musicTick(){
   if(cr&&cr.pending){cr.pending=false;SEEK_LAT=clamp(SEEK_LAT*0.5+(performance.now()-cr.at)/2000,0.05,4)}
   if(Math.abs(dr)>0.3&&!(cr&&cr.n>=3)){
     el._corr={n:(cr?cr.n:0)+1,at:performance.now(),pending:true};
-    const aim=want+(SEEK_LAT+0.03)*c.speed;
+    const aim=want+(SEEK_LAT+0.03)*sp;
     try{el.currentTime=clamp(aim,0,Math.max(0,c.out-0.05))}catch(e){}
     return;
   }
-  const r=Math.abs(dr)<0.012?c.speed:clamp(c.speed*(1-clamp(dr*2.5,-0.25,0.25)),0.0625,16);
+  const r=Math.abs(dr)<0.012?clamp(sp,0.0625,16):clamp(sp*(1-clamp(dr*2.5,-0.25,0.25)),0.0625,16);
   if(Math.abs(el.playbackRate-r)>0.004)el.playbackRate=r;
 }
 /* Hovedloop */
@@ -1851,7 +2177,7 @@ function tick(now){
       applyClipVolume(c,local);
       if(el.ended||local>=d-0.015)advanceClip();
     }else{
-      S.t+=dt;
+      S.t+=dt*pvRate();
       const local=S.t-start;
       if(local>=d)advanceClip();
     }
@@ -1900,6 +2226,28 @@ $('btnEnd').onclick=()=>seekTo(totalDur());
 $('btnPrevF').onclick=()=>seekTo(S.t-1/S.proj.fps);
 $('btnNextF').onclick=()=>seekTo(S.t+1/S.proj.fps);
 $('masterVol').oninput=e=>{S.masterVol=+e.target.value};
+/* Afspilningshastighed (se pvRate i motoren). Under afspilning forankres
+   musik-uret på ny fra S.t, så musikken genstartes i den nye fart; uden musik
+   får det kørende videoelement den nye fart, og billedklip tager den ved
+   næste billede. */
+function setPvRate(r,save){
+  r=+r;if(!PV_RATES.includes(r))r=1;
+  const el=$('pvRate');el.value=String(r);el.classList.toggle('slow',r!==1);
+  if(save&&!SELFTEST)try{localStorage.setItem('mediestudio_rate',String(r))}catch(e){}
+  if(r===pvRateSel)return;
+  pvRateSel=r;
+  if(!S.playing||webmRec)return;
+  if(MUS.on)musicStart();
+  else{const c=S.clips[curIdx];if(c&&isVid(c)&&vActive._cid===c.id)vActive.playbackRate=clamp(c.speed*pvRate(),0.0625,16)}
+}
+if(!SELFTEST)try{setPvRate(localStorage.getItem('mediestudio_rate'))}catch(e){}
+/* Valgt med musen: fokus tilbage til siden, så Mellemrum, ← → og M virker
+   med det samme (genvejslytteren springer <select> over). Med tastaturet
+   bliver fokus, så pilene kan skifte videre. */
+let pvRatePtr=false;
+$('pvRate').addEventListener('pointerdown',()=>{pvRatePtr=true});
+$('pvRate').addEventListener('keydown',()=>{pvRatePtr=false});
+$('pvRate').onchange=e=>{setPvRate(e.target.value,true);if(pvRatePtr){pvRatePtr=false;e.target.blur()}};
 </script>
 <script>
 /* ================================================================
@@ -2454,7 +2802,13 @@ const FXPRESETS={
   'Kold':{...FXDEF,sat:.8,hue:18,bright:1.02,contrast:1.06},
   'Punch':{...FXDEF,contrast:1.25,sat:1.35,bright:.98},
   'Nat':{...FXDEF,bright:.55,sat:.65,hue:15,contrast:1.12},
-  'Drøm':{...FXDEF,bright:1.12,blur:2,sat:1.2,contrast:.9}
+  'Drøm':{...FXDEF,bright:1.12,blur:2,sat:1.2,contrast:.9},
+  /* Looks (efterbehandling) */
+  'Neon':{...FXDEF,glow:.6,sat:1.35,contrast:1.1},
+  'Film':{...FXDEF,grain:.45,vignette:.5,contrast:1.06,sat:.9},
+  'VHS':{...FXDEF,vhs:.7,sat:.85,contrast:1.05},
+  'Glitch':{...FXDEF,rgb:.6,contrast:1.1},
+  'Kalejdoskop':{...FXDEF,mirror:3,sat:1.2}
 };
 /* Ikon fra GITATO-spriten. Erstatter de emoji der før stod som markup i
    inspektørens knapper — samme optiske vægt som resten af systemet. */
@@ -2541,6 +2895,8 @@ function renderInsp(){
 }
 function inspClip(B,c){
   const it=fileOf(c);
+  /* Klip fra før looks fandtes: standardværdier, så sliderne har et tal. */
+  for(const k in FXDEF)if(c.fx[k]==null)c.fx[k]=FXDEF[k];
   $('inspTitle').textContent=c.type==='video'?'Videoklip':'Billedklip';
   const s1=sec(B,'Klip');
   if(c.missing)s1.appendChild(el('div',null,`<div style="font-size:12px;color:var(--err);margin-bottom:8px;line-height:1.5">${ICO('warning','gi--sm')} Filen mangler: <b>${esc(c.missing.name)}</b>. Åbn mappen med filen, så forbindes klippet automatisk.</div>`));
@@ -2604,6 +2960,14 @@ function inspClip(B,c){
   rng(s2,'Gråtone',c.fx,'gray',0,1,0.01);
   rng(s2,'Sepia',c.fx,'sepia',0,1,0.01);
   rng(s2,'Invertér',c.fx,'invert',0,1,0.01);
+  /* Looks: efterbehandling oven på klippet (glød, korn, vignet, RGB-split, VHS, spejl). */
+  const sl=sec(B,'Looks');
+  rng(sl,'Glød',c.fx,'glow',0,1,0.01);
+  rng(sl,'Filmkorn',c.fx,'grain',0,1,0.01);
+  rng(sl,'Vignet',c.fx,'vignette',0,1,0.01);
+  rng(sl,'RGB-split',c.fx,'rgb',0,1,0.01);
+  rng(sl,'VHS',c.fx,'vhs',0,1,0.01);
+  selBox(sl,'Spejl',c.fx,'mirror',['0|Intet','1|Vandret','2|Lodret','3|Kalejdoskop'],v=>{c.fx.mirror=+v;renderTL()});
   const s4=sec(B,'Handlinger');
   const br=el('div','btnRow');
   const b1=el('button','sbtn',ICO('scissors')+' Del ved markøren');b1.onclick=splitAtPlayhead;
@@ -2614,6 +2978,8 @@ function inspClip(B,c){
   const bl=el('button','sbtn',ICO('chevron-left')+' Flyt tidligere');bl.title='Flyt klippet én plads frem (Alt+←)';bl.onclick=()=>moveClip(c,-1);
   const bri=el('button','sbtn','Flyt senere '+ICO('chevron-right'));bri.title='Flyt klippet én plads tilbage (Alt+→)';bri.onclick=()=>moveClip(c,1);
   br2.append(bl,bri);s4.appendChild(br2);
+  /* Baglæns, boomerang, frys billede og klipskift (se VÆRKTØJER). */
+  if(c.type==='video'&&!c.missing&&typeof inspClipTools==='function')inspClipTools(B,s4,c);
 }
 function inspText(B,tx){
   $('inspTitle').textContent='Tekst';
@@ -2636,6 +3002,13 @@ function inspText(B,tx){
     b.onclick=()=>{tx.x=x;tx.y=y;markDirty('placering');invalidate();renderInsp()};g.appendChild(b);
   });
   const gr=row('Hurtig');gr.appendChild(g);s2.appendChild(gr);
+  /* Animation ind (se drawFrame) og neon-glød. */
+  if(tx.anim==null)tx.anim='';if(tx.glow==null)tx.glow=0;
+  const sa=sec(B,'Animation');
+  selBox(sa,'Ind',tx,'anim',Object.entries(TX_ANIM).map(([k,v])=>`${k}|${v}`));
+  rng(sa,'Neon-glød',tx,'glow',0,1,0.01,{fmt:x=>x>0?Math.round(x*100)+'%':'fra'});
+  const bpv=el('button','sbtn',ICO('play')+' Vis fra start');bpv.title='Afspil fra tekstens start';bpv.onclick=()=>{seekTo(tx.start);play()};
+  const rpv=el('div','btnRow');rpv.appendChild(bpv);sa.appendChild(rpv);
   const s3=sec(B,'Udseende');
   rng(s3,'Størrelse',tx,'size',16,320,1);
   selBox(s3,'Skrifttype',tx,'font',FONTS);
@@ -2706,6 +3079,19 @@ function inspMusic(B){
   bh.onclick=()=>{m.start=S.t;renderTL();renderInsp();markDirty('flyt musik');musicChanged()};
   const bx=el('button','sbtn danger',ICO('trash')+' Fjern musik');bx.onclick=removeMusic;
   br.append(bh,bx);s1.appendChild(br);
+  /* Lydvisualisering: musikkens frekvensbånd som søjler eller cirkel i billedet. */
+  const sv=sec(B,'Lydvisualisering'),v=m.vis;
+  const vr=row('Stil'),vs=el('select');
+  for(const[k,txt]of[['','Fra'],['bars','Søjler'],['mirror','Spejlede søjler'],['circle','Cirkel']]){const o=el('option',null,txt);o.value=k;if((v?v.style:'')===k)o.selected=true;vs.appendChild(o)}
+  vs.onchange=()=>{m.vis=vs.value?{pos:'bund',size:0.25,opacity:0.9,color:'neon',...(m.vis||{}),style:vs.value}:null;markDirty('lydvisualisering');invalidate();renderInsp();if(m.vis)visEnsure()};
+  vr.appendChild(vs);sv.appendChild(vr);
+  if(v){
+    selBox(sv,'Placering',v,'pos',['bund|Bund','midt|Midt','top|Top']);
+    rng(sv,'Størrelse',v,'size',0.05,0.6,0.01,{fmt:x=>Math.round(x*100)+'%'});
+    rng(sv,'Synlighed',v,'opacity',0.1,1,0.01,{fmt:x=>Math.round(x*100)+'%'});
+    selBox(sv,'Farver',v,'color',['neon|Neon (cyan → magenta)','cyan|Cyan','ravgul|Ravgul','hvid|Hvid']);
+    if(!(it&&it.visB))sv.appendChild(el('div','mkInfo',m.missing?'Vises når musikfilen er fundet.':'Analyserer musikken…'));
+  }
   inspGrid(B,m);
 }
 /* Beat-grid: estimat, import af kickgrid.json, BPM (×2/÷2), første slag
@@ -2748,6 +3134,11 @@ function inspGrid(B,m){
   pc.onchange=()=>{m.pulse=pc.checked?0.04:0;markDirty('puls på slag');invalidate();renderInsp()};
   pr.appendChild(pc);s.appendChild(pr);
   if(m.pulse>0)rng(s,'Pulsstyrke',m,'pulse',0.01,0.12,0.005,{fmt:x=>'+'+Math.round(x*100)+'%'});
+  /* Bevægelse på slaget (ingen lysblink): rystelse og glitch (RGB-split + striber). */
+  if(m.shake==null)m.shake=0;if(m.glitch==null)m.glitch=0;
+  const offPct=x=>x>0?Math.round(x*100)+'%':'fra';
+  rng(s,'Ryst på slag',m,'shake',0,1,0.05,{fmt:offPct}).title='Billedet får et stød i en tilfældig retning på hvert slag';
+  rng(s,'Glitch på slag',m,'glitch',0,1,0.05,{fmt:offPct}).title='RGB-split og forskudte striber på hvert slag, der klinger hurtigt af';
   /* Klip på beat */
   const s2=sec(B,'Klip på beat');
   S.beatN=S.beatN||4;
@@ -2863,6 +3254,16 @@ function inspProject(B){
   const rr=row('Opløsning');rr.appendChild(resSel);s1.appendChild(rr);
   selBox(s1,'Billeder/sek',S.proj,'fps',['24','25','30','50','60'],v=>{S.proj.fps=+v;applyProjSize();markDirty('billeder/sek')});
   col(s1,'Baggrund',S.proj,'bg');
+  /* Fremdriftslinje i bunden eller toppen (som på TikTok-klip). */
+  const pbr=row('Fremdriftslinje'),pbc=el('input');pbc.type='checkbox';pbc.checked=!!S.proj.bar;
+  pbc.title='En tynd linje der viser hvor langt videoen er nået';
+  pbc.onchange=()=>{S.proj.bar=pbc.checked?{color:'#19E0FF',pos:'bund',h:1}:null;markDirty('fremdriftslinje');invalidate();renderInsp()};
+  pbr.appendChild(pbc);s1.appendChild(pbr);
+  if(S.proj.bar){
+    col(s1,'Linjens farve',S.proj.bar,'color');
+    selBox(s1,'Placering',S.proj.bar,'pos',['bund|Bund','top|Top']);
+    rng(s1,'Tykkelse',S.proj.bar,'h',0.5,4,0.1,{fmt:x=>(+x).toFixed(1)+'×'});
+  }
   const s2=sec(B,'Statistik');
   s2.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.8">
     Klip på tidslinjen: <b style="color:var(--txt)">${S.clips.length}</b><br>
@@ -2901,6 +3302,7 @@ function inspProject(B){
       sb.appendChild(r);
     }
   }
+  if(typeof inspGen==='function')inspGen(B);
   /* Windows-udgaven (GitHub Release). Vises kun på nettet; desktop-appen
      kører fra file:// og er selv Windows-udgaven. */
   if(location.protocol!=='file:'){
@@ -2953,9 +3355,15 @@ function parseMusic(pm,num){
   const f=matchFile(fname,fsize,true);
   const m={fid:f?f.id:null,start:num(pm.start,0,0,36000),in:num(pm.in,0,0,1e5),volume:num(pm.volume,1,0,1),
     fadeIn:num(pm.fadeIn,0,0,10),fadeOut:num(pm.fadeOut,0,0,10),fileDur:f?f.dur:num(pm.fileDur,0,0,1e5),
-    grid:parseGrid(pm.grid,num),pulse:num(pm.pulse,0,0,0.3)};
+    grid:parseGrid(pm.grid,num),pulse:num(pm.pulse,0,0,0.3),shake:num(pm.shake,0,0,1),glitch:num(pm.glitch,0,0,1),vis:parseVis(pm.vis,num)};
   if(!f)m.missing={name:fname,size:fsize};
   return m;
+}
+/* Lydvisualisering fra en projektfil: kun kendte valg og tal inden for grænser. */
+function parseVis(v,num){
+  if(!v||typeof v!=='object'||!['bars','mirror','circle'].includes(v.style))return null;
+  return{style:v.style,pos:['bund','midt','top'].includes(v.pos)?v.pos:'bund',size:num(v.size,0.25,0.05,0.6),
+    opacity:num(v.opacity,0.9,0.1,1),color:Object.prototype.hasOwnProperty.call(VIS_COLORS,v.color)?v.color:'neon'};
 }
 function applyProject(p,opts){
   opts=opts||{};
@@ -2971,9 +3379,12 @@ function applyProject(p,opts){
   S.proj.h=num(q.h,S.proj.h,16,7680)&~1;
   S.proj.fps=[24,25,30,50,60].includes(+q.fps)?+q.fps:S.proj.fps;
   S.proj.bg=/^#[0-9a-f]{6}$/i.test(q.bg)?q.bg:S.proj.bg;
+  const qb=q.bar;
+  S.proj.bar=qb&&typeof qb==='object'?{color:/^#[0-9a-f]{6}$/i.test(qb.color)?qb.color:'#19E0FF',pos:qb.pos==='top'?'top':'bund',h:num(qb.h,1,0.5,4)}:null;
   S.projManual=!!p.projManual;
   Object.assign(S.subStyle,p.subStyle||{});
-  S.texts=arr(p.texts).map(t=>({...t,id:uid(),text:typeof t.text==='string'?t.text:'',start:num(t.start,0,0,36000),dur:num(t.dur,3,0.1,3600),x:num(t.x,50,0,100),y:num(t.y,50,0,100),size:num(t.size,72,16,320),outline:num(t.outline,6,0,24)}));
+  S.texts=arr(p.texts).map(t=>({...t,id:uid(),text:typeof t.text==='string'?t.text:'',start:num(t.start,0,0,36000),dur:num(t.dur,3,0.1,3600),x:num(t.x,50,0,100),y:num(t.y,50,0,100),size:num(t.size,72,16,320),outline:num(t.outline,6,0,24),
+    anim:Object.prototype.hasOwnProperty.call(TX_ANIM,t.anim)?t.anim:'',glow:num(t.glow,0,0,1)}));
   S.subs=arr(p.subs).map(s=>({...s,id:uid(),text:typeof s.text==='string'?s.text:'',start:num(s.start,0,0,36000),dur:num(s.dur,2.5,0.1,600)}));
   const missing=[];
   S.clips=[];
@@ -2990,7 +3401,9 @@ function applyProject(p,opts){
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'||c.fit==='blur'?c.fit:'cover',
       ...(Object.prototype.hasOwnProperty.call(CUT_FX,c.cutFx)?{cutFx:c.cutFx}:{}),
-      fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,num(fx[k],FXDEF[k],-180,180)])),
+      /* Baglæns-kopi: hvilken kilde og hvilket stykke den blev lavet af. */
+      ...(c.rev&&typeof c.rev==='object'&&typeof c.rev.name==='string'?{rev:{name:c.rev.name.slice(0,260),size:num(c.rev.size,0,0,1e14),in:num(c.rev.in,0,0,1e5),out:num(c.rev.out,0,0,1e5)}}:{}),
+      fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,k==='mirror'?Math.round(num(fx[k],0,0,3)):['glow','grain','vignette','rgb','vhs'].includes(k)?num(fx[k],0,0,1):num(fx[k],FXDEF[k],-180,180)])),
       kb:kb&&typeof kb==='object'?{zs:num(kb.zs,1,1,2.2),ze:num(kb.ze,1,1,2.2),
         pxs:num(kb.pxs,num(kb.px,0,-1,1),-1,1),pxe:num(kb.pxe,-num(kb.px,0,-1,1),-1,1),
         pys:num(kb.pys,num(kb.py,0,-1,1),-1,1),pye:num(kb.pye,-num(kb.py,0,-1,1),-1,1)}:(type==='image'?defaultKb():undefined)
@@ -3008,6 +3421,8 @@ function applyProject(p,opts){
   ensureMusicBuf();
   applyProjSize();renderTL();invalidate();deselect();
   if(typeof mkAfterLoad==='function')mkAfterLoad();
+  /* Baglæns-kopier og frysebilleder fra IndexedDB; lydvisualiseringens analyse. */
+  if(typeof genRestore==='function'){genRestore();visEnsure()}
   $('stageHint').style.display=S.clips.length?'none':'flex';
   if(missing.length&&!opts.quiet)toast(`${missing.length} ${missing.length===1?'medie venter på sin fil':'medier venter på deres filer'} (${[...new Set(missing)].slice(0,3).join(', ')}${missing.length>3?' …':''}) — åbn mappen med dem`,'err');
   return missing.length;
@@ -3040,6 +3455,7 @@ function relinkMissing(opts){
   }
   /* Mærker uden kildens billedfrekvens (importerede) får den, når filen er her. */
   if(typeof mkFillFps==='function')mkFillFps();
+  if(typeof visEnsure==='function')visEnsure();
   return n+nm;
 }
 function readPrevAutosave(){
@@ -3317,6 +3733,8 @@ addEventListener('keydown',e=>{
     case't':case'T':addTextAtPlayhead();break;
     case'u':case'U':addSubAtPlayhead();break;
     case'm':case'M':e.preventDefault();mkStart();break;
+    case'?':e.preventDefault();keysOpen();break;
+    case'j':case'J':case'k':case'K':case'l':case'L':e.preventDefault();jklKey(e);break;
     case'Delete':case'Backspace':deleteSelected();break;
     case'i':case'I':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.in=clamp(c.in+ca.local*c.speed,0,c.out-0.08);renderTL();markDirty('ind-punkt');toast('Ind-punkt sat')}break}
     case'o':case'O':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.out=clamp(c.in+ca.local*c.speed,c.in+0.08,(fileOf(c)||{}).dur||c.out);renderTL();markDirty('ud-punkt');toast('Ud-punkt sat')}break}
@@ -3411,6 +3829,8 @@ $('expGo').onclick=async()=>{
   expCancelled=false;expRunning=true;pause();
   const savedT=S.t;
   try{
+    /* Lydvisualiseringen skal have sine bånd, før billederne tegnes. */
+    if(S.music&&S.music.vis&&typeof visEnsure==='function'){setProg(0,'Analyserer musikken til lydvisualiseringen…');await visEnsure()}
     const blob=fmt==='mp4'?await exportMP4(q,size,setProg):await exportWebM(q,setProg,size);
     if(blob&&!expCancelled){
       const ext=fmt==='mp4'?'.mp4':'.webm';
@@ -4912,7 +5332,7 @@ function mkFpsHint(s){
 /* Mærk-laget og firkant-laget ligger præcis over preview-lærredet. */
 function mkPlace(){
   const st=$('stage').getBoundingClientRect(),c=cv.getBoundingClientRect();
-  for(const e of[$('mkOv'),$('mkShow')]){
+  for(const e of[$('mkOv'),$('mkShow'),$('guideOv')]){
     e.style.left=(c.left-st.left)+'px';e.style.top=(c.top-st.top)+'px';
     e.style.width=c.width+'px';e.style.height=c.height+'px';
   }
@@ -5193,6 +5613,8 @@ function renderMarkTrack(){
     b.addEventListener('click',e=>{if(e.detail===0)mkGo(m.id)});
     tr.appendChild(b);
   });
+  /* Fundne klipskift (Find klipskift) som stiplede streger, indtil klippet deles. */
+  if(typeof scnLines==='function')for(const x of scnLines()){const d=document.createElement('div');d.className='scnLine';d.style.left=(x*px)+'px';tr.appendChild(d)}
   if(!S.marks.length&&!segs.length){const h=document.createElement('div');h.id='mkLaneHint';h.textContent='Tryk M for at mærke et sted i billedet';tr.appendChild(h)}
   mkShowKey=null;
 }
@@ -5510,6 +5932,625 @@ setTimeout(mkPruneThumbs,8000);
 </script>
 <script>
 /* ================================================================
+   VÆRKTØJER — baglæns, boomerang, frys billede, find klipskift,
+   lydvisualiseringens analyse, hjælpelinjer, fuld skærm og genveje
+   Baglæns-kopier og frysebilleder er filer MedieStudio selv laver. De
+   ligger ikke i nogen mappe, så de gemmes i IndexedDB og hentes derfra,
+   når et gemt projekt venter på dem.
+   ================================================================ */
+
+/* ---------- Fremdriftsdialog (lange opgaver) ---------- */
+const JOB={on:false,stop:false,prevFocus:null};
+function jobOpen(title,visible){
+  JOB.on=true;JOB.stop=false;JOB.prevFocus=document.activeElement;
+  $('jobTitle').textContent=title;$('jobFill').style.width='0%';$('jobTxt').textContent='Forbereder…';
+  $('jobWarn').style.display=visible?'flex':'none';
+  $('jobBack').classList.add('open');$('jobStop').focus();
+  return{prog:(p,txt)=>{$('jobFill').style.width=(clamp(p,0,1)*100).toFixed(1)+'%';if(txt)$('jobTxt').textContent=txt},stopped:()=>JOB.stop};
+}
+function jobClose(){
+  JOB.on=false;$('jobBack').classList.remove('open');
+  const p=JOB.prevFocus;JOB.prevFocus=null;if(p&&p.isConnected&&typeof p.focus==='function')p.focus();
+}
+$('jobStop').onclick=()=>{JOB.stop=true;$('jobTxt').textContent='Stopper…'};
+
+/* ---------- Genererede medier (IndexedDB) ---------- */
+const GEN_DB='mediestudio-genereret';
+function genIdb(){return new Promise((res,rej)=>{const r=indexedDB.open(GEN_DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function genTx(mode,fn){return genIdb().then(db=>new Promise((res,rej)=>{const tx=db.transaction('files',mode);fn(tx.objectStore('files'));tx.oncomplete=()=>{db.close();res()};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)}}))}
+function genSave(file){
+  if(SELFTEST||!window.indexedDB)return Promise.resolve();
+  return genTx('readwrite',st=>st.put({blob:file,type:file.type,at:Date.now()},file.name)).catch(e=>console.warn('Den genererede fil kunne ikke gemmes',e));
+}
+async function genLoad(name){
+  if(SELFTEST||!window.indexedDB)return null;
+  let v=null;
+  try{await genTx('readonly',st=>{const rq=st.get(name);rq.onsuccess=()=>{v=rq.result}})}catch(e){return null}
+  return v&&v.blob?new File([v.blob],name,{type:v.type||v.blob.type,lastModified:v.at||Date.now()}):null;
+}
+/* Klip der venter på en genereret fil (efter genindlæsning eller Indlæs), får den herfra. */
+async function genRestore(){
+  const want=[...new Set(S.clips.filter(c=>c.missing).map(c=>c.missing.name))];
+  if(!want.length)return 0;
+  const files=[];for(const n of want){const f=await genLoad(n);if(f)files.push(f)}
+  if(files.length)await addMediaFiles(files);
+  return files.length;
+}
+/* Genererede filer som intet gemt projekt bruger (det åbne, "færre klip"-kopien,
+   backup-ringen), ryddes efter 14 dage; knappen i Projekt rydder dem med det samme. */
+function genRefs(){
+  const keep=new Set(),add=p=>{if(p&&Array.isArray(p.clips))for(const c of p.clips)if(c&&typeof c.fileName==='string')keep.add(c.fileName)};
+  add(serializeProject());
+  try{add(JSON.parse(localStorage.getItem(LSKEY)||'null'))}catch(e){}
+  add(readPrevAutosave());for(const e of readBackups())add(e.p);
+  return keep;
+}
+async function genPrune(now){
+  if(SELFTEST||!window.indexedDB)return{n:0,bytes:0};
+  const keep=genRefs(),old=now?Infinity:Date.now()-14*864e5;let n=0,bytes=0;
+  await genTx('readwrite',st=>{const rq=st.openCursor();rq.onsuccess=()=>{const c=rq.result;if(!c)return;const v=c.value;
+    if(!keep.has(c.key)&&(now||!(v&&v.at>old))){n++;bytes+=v&&v.blob?v.blob.size:0;c.delete()}c.continue()}}).catch(()=>{});
+  return{n,bytes};
+}
+async function genStats(){
+  let n=0,bytes=0;
+  if(!SELFTEST&&window.indexedDB)await genTx('readonly',st=>{const rq=st.openCursor();rq.onsuccess=()=>{const c=rq.result;if(!c)return;n++;bytes+=c.value&&c.value.blob?c.value.blob.size:0;c.continue()}}).catch(()=>{});
+  return{n,bytes};
+}
+setTimeout(()=>genPrune(false),10000);
+
+/* ---------- Baglæns og boomerang ----------
+   Som Shotcut og CapCut: klippets stykke [Ind, Ud] renderes til en ny,
+   baglæns MP4, og klippet bruger den. Billederne fanges i én afspilning
+   fremad (requestVideoFrameCallback: realtid, uanset afstanden mellem
+   keyframes; søgning billede for billede tager op til 270 ms pr. billede
+   i en 1080p-video med lange GOP'er), huller fyldes ved søgning, og de
+   kodes i omvendt rækkefølge. Lyden vendes også (kan slås fra). */
+const REV={audio:true};
+try{REV.audio=localStorage.getItem('mediestudio_revaudio')!=='0'}catch(e){}
+async function renderReverse(file,inT,outT,fps,opts){
+  opts=opts||{};const prog=opts.prog||(()=>{}),stop=opts.stop||(()=>false);
+  const url=URL.createObjectURL(file),v=document.createElement('video');
+  v.muted=true;v.playsInline=true;v.preload='auto';v.src=url;
+  const halt=()=>{if(stop())throw new DOMException('Stoppet','AbortError')};
+  try{
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('videoen kan ikke afspilles'))});
+    const sw=v.videoWidth,sh=v.videoHeight;if(!sw||!sh)throw new Error('ingen videospor');
+    /* H.264: lige mål og højst 1920 på den lange led. */
+    const sc=Math.min(1,1920/Math.max(sw,sh)),W=Math.max(2,Math.round(sw*sc))&~1,H=Math.max(2,Math.round(sh*sc))&~1;
+    const k0=Math.max(0,Math.ceil(inT*fps-1e-6)),k1=Math.max(k0+1,Math.ceil(outT*fps-1e-6));   /* billederne [k0,k1) */
+    const N=k1-k0,frames=new Array(N).fill(null);
+    const cvs=document.createElement('canvas');cvs.width=W;cvs.height=H;const g=cvs.getContext('2d');
+    const grab=k=>new Promise(res=>{g.drawImage(v,0,0,W,H);cvs.toBlob(b=>{if(b&&!frames[k-k0])frames[k-k0]=b;res()},'image/jpeg',0.92)});
+    const seek=t=>new Promise(res=>{const done=()=>{v.removeEventListener('seeked',done);res()};v.addEventListener('seeked',done);v.currentTime=t});
+    /* 1) én afspilning fremad */
+    let got=0;const pend=[];
+    if(v.requestVideoFrameCallback){
+      await seek((k0+0.5)/fps);
+      await new Promise(res=>{
+        let fin=false;
+        const end=()=>{if(fin)return;fin=true;v.pause();res()};
+        const cb=(now,meta)=>{
+          if(fin)return;
+          const k=Math.round(meta.mediaTime*fps);
+          if(k>=k0&&k<k1&&!frames[k-k0]){got++;pend.push(grab(k));prog(0.6*got/N)}
+          if(k>=k1-1||v.ended||stop())end();else v.requestVideoFrameCallback(cb);
+        };
+        v.requestVideoFrameCallback(cb);v.onended=end;v.play().catch(end);
+        /* Går afspilningen i stå (skjult vindue), fyldes resten ved søgning. */
+        const guard=setInterval(()=>{if(fin)clearInterval(guard);else if(v.paused&&!v.seeking)end()},1000);
+      });
+      await Promise.all(pend);
+    }
+    /* 2) huller fyldes ved søgning (midt i billedet) */
+    for(let i=0;i<N;i++){
+      halt();if(frames[i])continue;
+      await seek((k0+i+0.5)/fps);await grab(k0+i);prog(0.6*(i+1)/N);
+    }
+    /* 3) lyd: stykket afkodes og vendes (eller beholdes forlæns) */
+    let audio=null;
+    if(!opts.noAudio)try{
+      const ab=await new OfflineAudioContext(2,1,48000).decodeAudioData(await file.arrayBuffer());
+      const a=Math.floor(inT*ab.sampleRate),b=Math.min(ab.length,Math.floor(outT*ab.sampleRate));
+      if(b>a){
+        const ch=Math.min(2,ab.numberOfChannels),len=b-a,data=[];
+        for(let c=0;c<ch;c++){const s=ab.getChannelData(c).subarray(a,b),r=new Float32Array(len);
+          if(opts.forwardAudio)r.set(s);else for(let i=0;i<len;i++)r[i]=s[len-1-i];data.push(r)}
+        audio={sr:ab.sampleRate,ch,len,data};
+      }
+    }catch(e){audio=null}   /* ingen lyd eller et lydformat browseren ikke kan: kun billede */
+    let acodec=null;
+    if(audio&&window.AudioEncoder)for(const codec of['mp4a.40.2','opus']){try{if((await AudioEncoder.isConfigSupported({codec,sampleRate:audio.sr,numberOfChannels:audio.ch,bitrate:192000})).supported){acodec=codec;break}}catch(e){}}
+    /* 4) kod baglæns */
+    const br=clamp(W*H*fps*0.2,2e6,4e7),cfg=await pickAvc(W,H,fps,br);
+    if(!cfg)throw new Error('browseren har ingen H.264-encoder');
+    const target=new Mp4Muxer.ArrayBufferTarget();
+    const mux=new Mp4Muxer.Muxer({target,fastStart:'in-memory',firstTimestampBehavior:'offset',
+      video:{codec:'avc',width:W,height:H},...(acodec?{audio:{codec:acodec==='opus'?'opus':'aac',sampleRate:audio.sr,numberOfChannels:audio.ch}}:{})});
+    let err=null;
+    const ve=new VideoEncoder({output:(c,m)=>mux.addVideoChunk(c,m),error:e=>{err=e}});ve.configure(cfg);
+    const fd=Math.round(1e6/fps),gop=Math.max(1,Math.round(fps));
+    for(let j=0;j<N;j++){
+      halt();if(err)throw err;
+      const bm=await createImageBitmap(frames[N-1-j]);frames[N-1-j]=null;
+      const vf=new VideoFrame(bm,{timestamp:Math.round(j*1e6/fps),duration:fd});
+      ve.encode(vf,{keyFrame:j%gop===0});vf.close();bm.close();
+      while(ve.encodeQueueSize>6)await sleep(2);
+      prog(0.6+0.35*(j+1)/N);
+    }
+    await ve.flush();ve.close();
+    if(acodec){
+      const ae=new AudioEncoder({output:(c,m)=>mux.addAudioChunk(c,m),error:e=>{err=e}});
+      ae.configure({codec:acodec,sampleRate:audio.sr,numberOfChannels:audio.ch,bitrate:192000});
+      /* Lyden må ikke blive længere end billedet (N billeder). */
+      const L=Math.min(audio.len,Math.round(N/fps*audio.sr)),step=4800;
+      for(let i=0;i<L;i+=step){
+        const n=Math.min(step,L-i),d=new Float32Array(n*audio.ch);
+        for(let c=0;c<audio.ch;c++)d.set(audio.data[c].subarray(i,i+n),c*n);
+        ae.encode(new AudioData({format:'f32-planar',sampleRate:audio.sr,numberOfFrames:n,numberOfChannels:audio.ch,timestamp:Math.round(i/audio.sr*1e6),data:d}));
+      }
+      await ae.flush();ae.close();
+    }
+    if(err)throw err;
+    mux.finalize();prog(1);
+    return{blob:new Blob([target.buffer],{type:'video/mp4'}),W,H,N,filled:N-got,audio:!!acodec};
+  }finally{v.removeAttribute('src');v.load();URL.revokeObjectURL(url)}
+}
+const genStem=n=>n.replace(/\.[^.]+$/,'');
+/* boom = boomerang: klippet bliver stående, og den baglæns kopi lægges lige efter. */
+async function revClip(c,boom){
+  if(JOB.on||expRunning||MK.pending)return;
+  const it=fileOf(c);
+  if(!it||c.type!=='video'||c.missing){toast('Klippet mangler sin fil','err');return}
+  if(!window.VideoEncoder||!window.Mp4Muxer){toast('Baglæns kræver Chrome eller Edge (WebCodecs)','err');return}
+  if(S.playing)pause();
+  const fps=await mkVideoFps(it)||S.proj.fps;
+  const src={name:it.name,size:it.size,in:c.in,out:c.out};
+  const name=`${genStem(it.name)} (baglæns ${Math.round(c.in*1000)}-${Math.round(c.out*1000)}${REV.audio?'':' lyd forlæns'}).mp4`;
+  let gi=S.files.find(x=>x.name===name&&!x.err);
+  if(!gi){
+    let file=await genLoad(name);
+    if(!file){
+      const job=jobOpen(boom?'Boomerang: laver den baglæns del':'Baglæns: laver en baglæns kopi',true);
+      try{
+        const r=await renderReverse(it.file,src.in,src.out,fps,{prog:p=>job.prog(p,`${Math.round(p*100)} %`),stop:job.stopped,forwardAudio:!REV.audio});
+        file=new File([r.blob],name,{type:'video/mp4',lastModified:Date.now()});
+      }catch(e){
+        jobClose();
+        if(e&&e.name==='AbortError')toast('Stoppet');else{console.warn('Baglæns fejlede',e);toast('Baglæns fejlede: '+(e&&e.message||e),'err')}
+        return;
+      }
+      jobClose();genSave(file);
+    }
+    await addMediaFiles([file]);
+    gi=S.files.find(x=>x.name===name&&!x.err);
+    if(!gi||!(gi.dur>0)){toast('Den baglæns kopi kunne ikke læses','err');return}
+  }
+  const i=S.clips.indexOf(c);if(i<0)return;   /* klippet blev slettet imens */
+  /* MP4'en kan være et par ms længere end stykket (AAC-polstring): Ud følger
+     stykket, så Forlæns igen rammer det samme Ind og Ud. */
+  const len=Math.min(gi.dur,src.out-src.in);
+  if(boom){
+    const n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined,fid:gi.id,in:0,out:len,rev:src,fadeIn:0};
+    delete n.cutFx;c.fadeOut=0;
+    S.clips.splice(i+1,0,n);select('clip',n.id);
+  }else{
+    c.rev=src;c.fid=gi.id;c.in=0;c.out=len;
+    BEAT_MARK.delete(c.id);renderInsp();
+  }
+  renderTL();markDirty(boom?'boomerang':'baglæns');seekTo(clamp(S.t,0,totalDur()));
+  toast(boom?'Boomerang: klippet spiller frem og så tilbage':'Klippet spiller nu baglæns','ok');
+}
+/* Forlæns igen: stykket af kopien svarer til [ud − kopiens Ud, ud − kopiens Ind]
+   i originalen, så det virker også efter trim og deling. */
+function revUndo(c){
+  const r=c.rev;if(!r)return;
+  const f=matchFile(r.name,r.size);
+  if(!f){toast(`Den oprindelige fil (${r.name}) er ikke indlæst — åbn mappen med den`,'err');return}
+  const a=clamp(r.out-c.out,0,f.dur),b=clamp(r.out-c.in,a+0.05,f.dur);
+  c.fid=f.id;c.in=a;c.out=b;delete c.rev;
+  renderTL();renderInsp();markDirty('forlæns igen');seekTo(clamp(S.t,0,totalDur()));
+}
+
+/* ---------- Frys billede ---------- */
+const FRZ_DUR=2;
+function grabFrame(file,t){
+  return new Promise((res,rej)=>{
+    const v=document.createElement('video'),u=URL.createObjectURL(file);
+    const done=(fn,x)=>{v.removeAttribute('src');v.load();URL.revokeObjectURL(u);fn(x)};
+    v.muted=true;v.preload='auto';
+    v.onerror=()=>done(rej,new Error('videoen kan ikke læses'));
+    v.onloadedmetadata=()=>{v.currentTime=t};
+    v.onseeked=()=>{
+      try{const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;c.getContext('2d').drawImage(v,0,0);
+        c.toBlob(b=>b?done(res,b):done(rej,new Error('billedet kunne ikke kodes')),'image/jpeg',0.95)}
+      catch(e){done(rej,e)}
+    };
+    v.src=u;
+  });
+}
+/* Kildens billede under markøren bliver et stillbillede på FRZ_DUR s, der
+   indsættes lige der (klippet deles om nødvendigt). Skubber resten frem. */
+async function freezeFrame(c){
+  if(JOB.on||expRunning||MK.pending)return;
+  const ca=clipAt(S.t);
+  if(!ca||ca.c!==c){toast('Sæt markøren i det klip, der skal fryses','err');return}
+  const it=fileOf(c);if(!it||c.type!=='video'||c.missing)return;
+  if(S.playing)pause();
+  const fps=await mkVideoFps(it)||S.proj.fps;
+  const st=c.in+ca.local*c.speed,mid=clamp((Math.floor(st*fps+1e-6)+0.5)/fps,0,Math.max(0,(it.dur||st)-0.001));
+  const name=`${genStem(it.name)} (frys ${Math.round(mid*1000)}).jpg`;
+  let gi=S.files.find(x=>x.name===name&&!x.err);
+  if(!gi){
+    let file;
+    try{file=new File([await grabFrame(it.file,mid)],name,{type:'image/jpeg',lastModified:Date.now()})}
+    catch(e){toast('Billedet kunne ikke tages: '+(e&&e.message||e),'err');return}
+    genSave(file);await addMediaFiles([file]);
+    gi=S.files.find(x=>x.name===name&&!x.err);
+    if(!gi){toast('Billedet kunne ikke læses','err');return}
+  }
+  const i=S.clips.indexOf(c);if(i<0)return;
+  const local=clamp(S.t-clipStart(i),0,clipDur(c));
+  const img={id:uid(),fid:gi.id,type:'image',imgDur:FRZ_DUR,in:0,out:FRZ_DUR,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:c.fit,fx:{...c.fx},kb:{zs:1,ze:1,pxs:0,pxe:0,pys:0,pye:0}};
+  if(local>0.05&&local<clipDur(c)-0.05){
+    const c2={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined},cut=c.in+local*c.speed;
+    c2.in=cut;c2.out=c.out;c.out=cut;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;
+    S.clips.splice(i+1,0,img,c2);
+  }else S.clips.splice(local<=0.05?i:i+1,0,img);
+  select('clip',img.id);renderTL();markDirty('frys billede');seekTo(clipStart(S.clips.indexOf(img))+0.01);
+  toast(`Billedet er frosset i ${FRZ_DUR} s — længden ændres i inspektøren`,'ok');
+}
+
+/* ---------- Find klipskift (hårde snit) ----------
+   Hvert billede skaleres til 64×36 gråtoner, og forskellen til forrige
+   billede (d, middel af |Δ|) giver et spring ved et snit.
+   Er søgning billig (korte GOP'er som i AI-videoer: ~5 ms pr. billede),
+   scannes HVERT billede ved søgning: deterministisk og billedpræcist. Et snit
+   er et lokalt maksimum der er mindst 2× det største spring blandt de to
+   billeder på hver side (ægte snit i en AI-remake: 44-64 mod højst 23).
+   Er søgning dyr (lange GOP'er), tages prøver under én afspilning i 4× fart,
+   og et snit er et spring over 2,2× den lokale median eller et stort
+   histogramspring (h); kandidaterne forfines ved søgning. Snittene vises
+   først, og følsomheden kan vælges. */
+const SCN={cid:null,cuts:null,sens:'normal'};
+const SCN_RULE={faerre:[3,0.4,4,2.6],normal:[2.2,0.3,3,2],flere:[1.7,0.22,2.5,1.6]};
+const scnPass=(x,s)=>{const r=SCN_RULE[s]||SCN_RULE.normal;return x.mode==='frame'?x.r>=r[3]:x.d>=r[0]*x.dm+2||x.h>=r[1]&&x.h>=r[2]*x.hm};
+async function detectCuts(file,inT,outT,fps,opts){
+  opts=opts||{};const prog=opts.prog||(()=>{}),stop=opts.stop||(()=>false);
+  const url=URL.createObjectURL(file),v=document.createElement('video');
+  v.muted=true;v.playsInline=true;v.preload='auto';v.src=url;
+  const SW=64,SH=36,cvs=document.createElement('canvas');cvs.width=SW;cvs.height=SH;
+  const g=cvs.getContext('2d',{willReadFrequently:true});
+  const luma=()=>{g.drawImage(v,0,0,SW,SH);const d=g.getImageData(0,0,SW,SH).data,y=new Uint8Array(SW*SH);
+    for(let i=0,j=0;i<d.length;i+=4,j++)y[j]=(d[i]*77+d[i+1]*150+d[i+2]*29)>>8;return y};
+  const dist=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=Math.abs(a[i]-b[i]);return s/a.length};
+  const hist=y=>{const h=new Float32Array(16);for(let i=0;i<y.length;i++)h[y[i]>>4]++;for(let i=0;i<16;i++)h[i]/=y.length;return h};
+  const hdist=(a,b)=>{const x=hist(a),z=hist(b);let s=0;for(let i=0;i<16;i++)s+=Math.abs(x[i]-z[i]);return s/2};
+  const seek=t=>new Promise(res=>{const done=()=>{v.removeEventListener('seeked',done);res()};v.addEventListener('seeked',done);v.currentTime=t});
+  try{
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('videoen kan ikke afspilles'))});
+    outT=Math.min(outT,v.duration||outT);
+    const k0=Math.ceil(inT*fps-1e-6),k1=Math.max(k0+1,Math.ceil(outT*fps-1e-6));
+    /* Hvad koster en søgning her? Fire billeder midt i stykket, efter én
+       søgning til opvarmning (den første afkoder fra bunden). */
+    const km=Math.max(k0,Math.floor((k0+k1)/2)-2);
+    await seek((km-1+0.5)/fps);await seek((km+3.5)/fps);
+    let t0=performance.now();
+    for(let k=km;k<km+4&&k<k1;k++)await seek((k+0.5)/fps);
+    const seekMs=(performance.now()-t0)/4;
+    if(seekMs*(k1-k0)<Math.max(20000,(outT-inT)*1000/2)){
+      /* 1') hvert billede ved søgning */
+      const D=[];let py=null;
+      for(let k=k0;k<k1;k++){
+        if(stop())throw new DOMException('Stoppet','AbortError');
+        await seek((k+0.5)/fps);const y=luma();
+        if(py)D.push({k,d:dist(y,py)});py=y;
+        if(k%12===0)prog((k-k0)/(k1-k0));
+      }
+      const cuts=[];
+      for(let i=0;i<D.length;i++){
+        const d=D[i].d;if(d<14)continue;
+        let nb=0;for(let j=Math.max(0,i-2);j<=Math.min(D.length-1,i+2);j++)if(j!==i)nb=Math.max(nb,D[j].d);
+        if(nb>d)continue;
+        const r=d/Math.max(1,nb);
+        if(r>=SCN_RULE.flere[3])cuts.push({t:D[i].k/fps,d,r,mode:'frame'});
+      }
+      prog(1);
+      return cuts;
+    }
+    /* 1) prøver */
+    const P=[];let prev=null;
+    await seek(inT+0.5/fps);
+    if(v.requestVideoFrameCallback)await new Promise(res=>{
+      let fin=false;const end=()=>{if(fin)return;fin=true;v.pause();res()};
+      const cb=(now,meta)=>{
+        if(fin)return;
+        const y=luma();if(prev)P.push({t:meta.mediaTime,d:dist(y,prev),h:hdist(y,prev)});prev=y;
+        prog(0.8*clamp((meta.mediaTime-inT)/Math.max(0.01,outT-inT),0,1));
+        if(meta.mediaTime>=outT-0.5/fps||v.ended||stop())end();else v.requestVideoFrameCallback(cb);
+      };
+      v.requestVideoFrameCallback(cb);v.onended=end;
+      v.playbackRate=4;v.play().catch(end);
+      const guard=setInterval(()=>{if(fin)clearInterval(guard);else if(v.paused&&!v.seeking)end()},1000);
+    });
+    if(stop())throw new DOMException('Stoppet','AbortError');
+    /* 2) kandidater: lokalt maksimum over gulvet, der består den løseste regel */
+    const med=(i,k)=>{const a=[];for(let j=0;j<P.length;j++)if(j!==i&&Math.abs(P[j].t-P[i].t)<=1)a.push(P[j][k]);a.sort((x,y)=>x-y);return a.length?a[a.length>>1]:0};
+    const cand=[];
+    for(let i=0;i<P.length;i++){
+      const d=P[i].d;if(d<14)continue;
+      if(i>0&&P[i-1].d>d||i+1<P.length&&P[i+1].d>=d)continue;
+      const x={i,d,dm:med(i,'d'),h:P[i].h,hm:med(i,'h')};
+      if(scnPass(x,'flere'))cand.push(x);
+    }
+    /* 3) forfin: snittet ligger mellem forrige prøve og denne */
+    const cuts=[];
+    for(let n=0;n<cand.length;n++){
+      if(stop())throw new DOMException('Stoppet','AbortError');
+      const x=cand[n],ta=x.i>0?P[x.i-1].t:P[x.i].t-1/fps,tb=P[x.i].t;
+      let best=Math.round(tb*fps),bd=-1,py=null;
+      for(let k=Math.round(ta*fps);k<=Math.round(tb*fps);k++){
+        await seek((k+0.5)/fps);const y=luma();
+        if(py){const dd=dist(y,py);if(dd>bd){bd=dd;best=k}}
+        py=y;
+      }
+      const t=best/fps;
+      if(!cuts.length||t-cuts[cuts.length-1].t>=0.3)cuts.push({t,d:x.d,dm:x.dm,h:x.h,hm:x.hm});
+      prog(0.8+0.2*(n+1)/cand.length);
+    }
+    prog(1);
+    return cuts;
+  }finally{v.removeAttribute('src');v.load();URL.revokeObjectURL(url)}
+}
+async function scnFind(c){
+  if(JOB.on||expRunning||MK.pending)return;
+  const it=fileOf(c);if(!it||c.type!=='video'||c.missing)return;
+  if(S.playing)pause();
+  const fps=await mkVideoFps(it)||S.proj.fps;
+  const job=jobOpen('Finder klipskift i '+it.name,true);
+  let cuts;
+  try{cuts=await detectCuts(it.file,c.in,c.out,fps,{prog:p=>job.prog(p,`${Math.round(p*100)} %`),stop:job.stopped})}
+  catch(e){jobClose();if(e&&e.name==='AbortError')toast('Stoppet');else toast('Søgningen efter klipskift fejlede: '+(e&&e.message||e),'err');return}
+  jobClose();
+  if(!S.clips.includes(c))return;
+  SCN.cid=c.id;SCN.cuts=cuts.filter(x=>x.t>c.in+0.05&&x.t<c.out-0.05);
+  renderTL();renderInsp();
+  const n=scnList().length;
+  toast(n?`${n} klipskift fundet — de står som stiplede streger på mærkesporet`:'Ingen klipskift fundet i klippet',n?'ok':'',{ms:5000});
+}
+const scnClip=()=>SCN.cid?S.clips.find(c=>c.id===SCN.cid):null;
+const scnList=()=>{const c=scnClip();return c&&SCN.cuts?SCN.cuts.filter(x=>x.t>c.in+0.05&&x.t<c.out-0.05&&scnPass(x,SCN.sens)):[]};
+/* Tidslinje-tider for de viste snit (mærkesporet tegner dem). */
+function scnLines(){
+  const c=scnClip();if(!c)return[];
+  const st=clipStart(S.clips.indexOf(c));
+  return scnList().map(x=>st+(x.t-c.in)/c.speed);
+}
+function scnSplit(c){
+  const cuts=scnList().map(x=>x.t).sort((a,b)=>b-a);
+  const i=S.clips.indexOf(c);if(i<0||!cuts.length)return;
+  for(const ft of cuts){   /* bagfra: c beholder hele tiden den venstre del */
+    const c2={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};
+    c2.in=ft;c2.out=c.out;c.out=ft;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;
+    S.clips.splice(i+1,0,c2);
+  }
+  SCN.cid=null;SCN.cuts=null;
+  renderTL();renderInsp();markDirty('del ved klipskift');
+  toast(`Klippet er delt i ${cuts.length+1} dele`,'ok');
+}
+
+/* ---------- Klip-inspektøren: værktøjerne ---------- */
+function inspClipTools(B,s4,c){
+  const r=el('div','btnRow');
+  const bv=el('button','sbtn',ICO('undo')+(c.rev?' Forlæns igen':' Baglæns'));
+  bv.title=c.rev?'Brug den oprindelige, forlæns video igen':'Lav en baglæns kopi af klippet og brug den';
+  bv.onclick=()=>c.rev?revUndo(c):revClip(c);
+  r.appendChild(bv);
+  if(!c.rev){const bb=el('button','sbtn',ICO('refresh')+' Boomerang');bb.title='Klippet forlæns og derefter det samme stykke baglæns';bb.onclick=()=>revClip(c,true);r.appendChild(bb)}
+  s4.appendChild(r);
+  if(!c.rev){
+    const rr=row('Lyd baglæns'),rc=el('input');rc.type='checkbox';rc.checked=REV.audio;
+    rc.title='Vend også lyden (ellers spiller lyden forlæns under det baglæns billede)';
+    rc.onchange=()=>{REV.audio=rc.checked;try{localStorage.setItem('mediestudio_revaudio',rc.checked?'1':'0')}catch(e){}};
+    rr.appendChild(rc);s4.appendChild(rr);
+  }
+  const r2=el('div','btnRow');
+  const bf=el('button','sbtn',ICO('image')+' Frys billede');bf.title=`Frys billedet ved markøren i ${FRZ_DUR} s`;bf.onclick=()=>freezeFrame(c);
+  const bs=el('button','sbtn',ICO('scissors')+' Find klipskift');bs.title='Find de hårde snit i klippet (fx shots i en AI-video), så det kan deles ved dem';bs.onclick=()=>scnFind(c);
+  r2.append(bf,bs);s4.appendChild(r2);
+  if(SCN.cid===c.id&&SCN.cuts){
+    const n=scnList().length,sc=sec(B,'Klipskift fundet');
+    sc.appendChild(el('div','mkInfo',n?`${n} snit i klippet. De står som stiplede streger på mærkesporet.`:'Ingen snit med denne følsomhed.'));
+    const fr=row('Følsomhed'),fs=el('select');
+    for(const[k,txt]of[['faerre','Færre snit'],['normal','Normal'],['flere','Flere snit']]){const o=el('option',null,txt);o.value=k;if(SCN.sens===k)o.selected=true;fs.appendChild(o)}
+    fs.onchange=()=>{SCN.sens=fs.value;renderTL();renderInsp()};
+    fr.appendChild(fs);sc.appendChild(fr);
+    const r3=el('div','btnRow');
+    const bd=el('button','sbtn acc',ICO('scissors')+` Del ved ${n} snit`);bd.disabled=!n;bd.onclick=()=>scnSplit(c);
+    const bk=el('button','sbtn','Kassér');bk.onclick=()=>{SCN.cid=null;SCN.cuts=null;renderTL();renderInsp()};
+    r3.append(bd,bk);sc.appendChild(r3);
+  }
+}
+/* Projektet: genererede filer (antal, plads, ryd ubrugte). Sektionen lægges
+   på plads med det samme og fyldes, når IndexedDB har svaret. */
+function inspGen(B){
+  const s=sec(B,'Genererede filer');s.hidden=true;
+  genStats().then(g=>{
+    if(!g.n||!s.isConnected)return;
+    s.hidden=false;
+    s.appendChild(el('div','mkInfo',`${g.n} ${g.n===1?'fil':'filer'} (baglæns-kopier, frysebilleder) · ${(g.bytes/1048576).toFixed(1).replace('.',',')} MB i browseren`));
+    const r=el('div','btnRow'),b=el('button','sbtn','Ryd ubrugte');b.title='Slet de genererede filer, som intet gemt projekt bruger';
+    b.onclick=async()=>{const x=await genPrune(true);toast(x.n?`${x.n} ${x.n===1?'fil':'filer'} ryddet (${(x.bytes/1048576).toFixed(1).replace('.',',')} MB)`:'Ingen ubrugte filer','ok');renderInsp()};
+    r.appendChild(b);s.appendChild(r);
+  });
+}
+
+/* ---------- Lydvisualiseringens analyse ----------
+   FFT 2048 (Hann) pr. 1/60 s, 48 logaritmiske bånd 40 Hz-16 kHz i dB
+   (-62..0 → 0..255), hurtig stigning og langsommere fald. Regnes én gang pr.
+   musikfil i bidder, så siden ikke fryser (ca. 1 s pr. 4 minutters musik). */
+function fftReal(re,im){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}
+  for(let len=2;len<=n;len<<=1){
+    const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;
+      for(let k=0;k<len/2;k++){const a=i+k,b=a+len/2,xr=re[b]*cr-im[b]*ci,xi=re[b]*ci+im[b]*cr;
+        re[b]=re[a]-xr;im[b]=im[a]-xi;re[a]+=xr;im[a]+=xi;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t}}
+  }
+}
+async function visBands(buf){
+  const sr=buf.sampleRate,N=2048,n=Math.ceil(buf.duration*VIS_RATE),out=new Uint8Array(n*VIS_NB);
+  const ch=[];for(let c=0;c<Math.min(2,buf.numberOfChannels);c++)ch.push(buf.getChannelData(c));
+  const L=ch[0].length,win=new Float32Array(N);for(let i=0;i<N;i++)win[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
+  const edges=[];for(let b=0;b<=VIS_NB;b++)edges.push(Math.max(1,Math.round(40*Math.pow(16000/40,b/VIS_NB)*N/sr)));
+  const re=new Float32Array(N),im=new Float32Array(N),prev=new Float32Array(VIS_NB);
+  for(let f=0;f<n;f++){
+    const c0=Math.round(f/VIS_RATE*sr)-N/2;
+    for(let i=0;i<N;i++){const k=c0+i;let v=0;if(k>=0&&k<L){for(const d of ch)v+=d[k];v/=ch.length}re[i]=v*win[i];im[i]=0}
+    fftReal(re,im);
+    for(let b=0;b<VIS_NB;b++){
+      let mx=0;const a=edges[b],z=Math.max(a+1,edges[b+1]);
+      for(let k=a;k<z&&k<N/2;k++){const p=re[k]*re[k]+im[k]*im[k];if(p>mx)mx=p}
+      let v=clamp((10*Math.log10(mx/(N*N/16)+1e-12)+62)/62,0,1);
+      v=v>prev[b]?v:prev[b]*0.86+v*0.14;prev[b]=v;
+      out[f*VIS_NB+b]=Math.round(v*255);
+    }
+    if(f%600===599)await sleep(0);
+  }
+  return out;
+}
+function visEnsure(){
+  const m=S.music;if(!m||!m.vis||m.missing)return Promise.resolve(false);
+  const it=musicFile();if(!it)return Promise.resolve(false);
+  if(it.visB)return Promise.resolve(true);
+  if(!it.visP)it.visP=(async()=>{
+    try{
+      const buf=await ensureMusicBuf();if(!buf)return false;
+      const b=await visBands(buf);
+      if(musicFile()!==it)return false;   /* musikken blev skiftet imens */
+      it.visB=b;invalidate();if(S.sel.kind==='music'&&!MK.pending)renderInsp();
+      return true;
+    }catch(e){console.warn('Lydvisualiseringen kunne ikke analysere musikken',e);return false}
+    finally{it.visP=null}
+  })();
+  return it.visP;
+}
+
+/* ---------- Hjælpelinjer i preview (kommer ikke med i videoen) ----------
+   Platformenes knapper og tekster dækker kanterne af et 9:16-klip. Tallene
+   er omtrentlige (tredjepartsguides, 2026; ingen platform udgiver dem for
+   almindelige opslag): top, bund, venstre, højre i px af 1080×1920. */
+const GUIDE_ZONES={tiktok:[220,480,60,140,'TikTok'],reels:[270,670,65,120,'Reels'],shorts:[288,672,48,192,'Shorts']};
+let guideMode='';
+try{guideMode=localStorage.getItem('mediestudio_guide')||''}catch(e){}
+function guideRender(){
+  const o=$('guideOv');o.innerHTML='';
+  const z=GUIDE_ZONES[guideMode];
+  if(guideMode==='grid')o.innerHTML='<svg viewBox="0 0 300 300" preserveAspectRatio="none"><path d="M100 0V300M200 0V300M0 100H300M0 200H300" /></svg>';
+  else if(z){
+    const t=z[0]/1920*100,b=z[1]/1920*100,l=z[2]/1080*100,r=z[3]/1080*100;
+    o.innerHTML=`<div class="gz" style="left:0;top:0;right:0;height:${t}%"></div><div class="gz" style="left:0;bottom:0;right:0;height:${b}%"></div>`+
+      `<div class="gz" style="left:0;top:${t}%;bottom:${b}%;width:${l}%"></div><div class="gz" style="right:0;top:${t}%;bottom:${b}%;width:${r}%"></div>`+
+      `<div class="gzLbl" style="top:${t}%;left:${l}%">${z[4]}: sikker zone (omtrentlig)</div>`;
+  }
+  o.hidden=!guideMode;
+  if(guideMode)mkPlace();
+}
+$('guideSel').value=guideMode;
+$('guideSel').onchange=e=>{guideMode=e.target.value;try{localStorage.setItem('mediestudio_guide',guideMode)}catch(err){}guideRender();e.target.blur()};
+guideRender();
+
+/* ---------- Fuld skærm (knap, eller dobbeltklik på billedet) ---------- */
+function toggleFull(){
+  if(document.fullscreenElement)document.exitFullscreen().catch(()=>{});
+  else $('stage').requestFullscreen().catch(()=>toast('Fuld skærm er ikke tilladt her','err'));
+}
+$('btnFull').onclick=toggleFull;
+$('stage').addEventListener('dblclick',e=>{if(!MK.pending&&e.target.closest('#stage')&&!e.target.closest('#mkOv'))toggleFull()});
+document.addEventListener('fullscreenchange',()=>{requestAnimationFrame(()=>{mkPlace();invalidate()})});
+
+/* ---------- J / K / L: baglæns, stop, fremad ----------
+   Som i Premiere, Resolve og Final Cut: L afspiller fremad og går hurtigere
+   for hvert tryk (×2 op til 4×, via previewets afspilningshastighed), J
+   afspiller baglæns på samme måde, og K stopper. K holdt nede + J/L går ét
+   billede. En video kan ikke afspilles baglæns i browseren, så J søger
+   billede for billede bagud i væguret: jævnt i videoer med korte GOP'er
+   (AI-klip), hakkende i lange (kameraoptagelser). Baglæns er uden lyd. */
+const JKL={rev:0,raf:0,last:0,t:0,set:0,k:false};
+function jklBadge(txt){const b=$('jklBadge');b.hidden=!txt;if(txt)b.textContent=txt}
+function jklRevTick(now){
+  if(!JKL.rev)return;
+  if(S.playing||expRunning||MK.pending||JOB.on){JKL.rev=0;jklBadge('');return}
+  /* Har brugeren selv flyttet markøren (lineal, klik), fortsættes derfra. */
+  if(!seekBusy&&Math.abs(S.t-JKL.set)>0.05)JKL.t=S.t;
+  const dt=Math.min(0.1,(now-JKL.last)/1000);JKL.last=now;
+  JKL.t=Math.max(0,JKL.t-dt*JKL.rev);
+  if(!seekBusy&&Math.abs(JKL.t-S.t)>1e-4){JKL.set=JKL.t;seekTo(JKL.t)}
+  if(JKL.t<=0&&!seekBusy){JKL.rev=0;jklBadge('');return}
+  JKL.raf=requestAnimationFrame(jklRevTick);
+}
+function jklRevStop(){if(JKL.rev){JKL.rev=0;cancelAnimationFrame(JKL.raf)}jklBadge('')}
+function jklRev(){
+  if(!S.clips.length)return;
+  if(S.playing)pause();
+  JKL.rev=JKL.rev?Math.min(4,JKL.rev*2):1;
+  JKL.t=JKL.set=S.t;JKL.last=performance.now();
+  cancelAnimationFrame(JKL.raf);JKL.raf=requestAnimationFrame(jklRevTick);
+  jklBadge(`◀ ${JKL.rev}×`);
+}
+function jklFwd(){
+  if(!S.clips.length)return;
+  jklRevStop();
+  if(!S.playing){play();jklBadge('');return}
+  if(typeof setPvRate==='function'&&typeof pvRateSel!=='undefined'){
+    const r=pvRateSel>=1?Math.min(4,pvRateSel*2):pvRateSel*2;
+    setPvRate(r,true);jklBadge(r!==1?`▶ ${String(r).replace('.',',')}×`:'');
+  }
+}
+function jklStop(){jklRevStop();if(S.playing)pause()}
+/* Tasterne: K trykket ned husker vi, så K+J/K+L kan gå ét billede. */
+function jklKey(e){
+  const k=e.key.toLowerCase();
+  if(k==='k'){JKL.k=true;jklStop();return true}
+  if(k==='j'){if(JKL.k)seekTo(S.t-1/S.proj.fps);else jklRev();return true}
+  if(k==='l'){if(JKL.k)seekTo(S.t+1/S.proj.fps);else jklFwd();return true}
+  return false;
+}
+addEventListener('keyup',e=>{if(e.key==='k'||e.key==='K')JKL.k=false});
+addEventListener('blur',()=>{JKL.k=false});
+/* Afspilning med Mellemrum eller knappen fjerner baglæns-mærket. */
+$('btnPlay').addEventListener('click',()=>jklRevStop(),true);
+
+/* ---------- Tastaturgenveje (?) ---------- */
+const KEYS=[
+  ['Afspil',[['Mellemrum','afspil / pause'],['← →','ét billede'],['Shift+← →','ét sekund'],['Home / End','start / slut'],['J K L','baglæns / stop / fremad (tryk igen: hurtigere)']]],
+  ['Rediger',[['S','del klip ved markøren'],['T / U','ny tekst / undertekst'],['M','mærk et sted i billedet'],['I / O','ind- / ud-punkt for det valgte klip'],['Alt+← →','flyt det valgte'],['Ctrl+D','duplikér'],['Delete','slet det valgte'],['Ctrl+Z / Ctrl+Y','fortryd / gentag']]],
+  ['Visning',[['F','fokus (skjul sidepanelerne)'],['+ / −','zoom tidslinjen'],['Dobbeltklik på billedet','fuld skærm'],['Ctrl+S','gem projektet'],['?','denne oversigt']]]
+];
+function keysOpen(){
+  const L=$('keysList');
+  if(!L.childElementCount)for(const[h,rows]of KEYS){L.appendChild(el('h3',null,esc(h)));for(const[k,d]of rows){const r=el('div','kRow');r.appendChild(el('span','kKey',esc(k)));r.appendChild(el('span',null,esc(d)));L.appendChild(r)}}
+  $('keysBack').classList.add('open');$('keysClose').focus();
+}
+function keysClose(){$('keysBack').classList.remove('open')}
+$('keysClose').onclick=keysClose;$('btnKeys').onclick=keysOpen;
+$('keysBack').addEventListener('click',e=>{if(e.target===$('keysBack'))keysClose()});
+/* Åbne dialoger (fremdrift, genveje) tager tastaturet: Esc stopper/lukker,
+   Tab bliver i dialogen, og ingen genveje rammer projektet imens. */
+addEventListener('keydown',e=>{
+  const back=$('jobBack').classList.contains('open')?$('jobBack'):$('keysBack').classList.contains('open')?$('keysBack'):null;
+  if(!back)return;
+  if(e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();if(back===$('jobBack'))$('jobStop').click();else keysClose();return}
+  e.stopImmediatePropagation();
+  /* Enter/Mellemrum aktiverer knappen som normalt; Tab bliver på dialogens knap. */
+  if((e.key==='Enter'||e.key===' ')&&e.target.tagName==='BUTTON'&&back.contains(e.target))return;
+  e.preventDefault();
+  if(e.key==='Tab'){const b=back.querySelector('button');if(b)b.focus()}
+},true);
+</script>
+<script>
+/* ================================================================
    SELVTEST (?selftest) + OPSTART
    ================================================================ */
 function stBadge(txt,ok){
@@ -5611,6 +6652,32 @@ async function selftest(){
     addClipFromFile(fA);if(fT)addClipFromFile(fT);addClipFromFile(fB);
     for(const c of S.clips)if(c.type==='image'){c.imgDur=1;c.out=1}
     S.clips[0].fx.sat=1.6;S.clips[0].fadeIn=0.3;
+    /* Afspilningshastighed: afspil 0,5× fra t0 og mål S.t mod væguret. ok()
+       siger at det rigtige ur kører. Kører det ikke inden for 2 s (browseren
+       spærrer lyd eller afspilning uden et klik, eller vinduet er skjult),
+       gives null, og den del springes over. probe() læses før pausen. */
+    const rateRun=async(t0,ok,probe)=>{
+      seekTo(t0);await sleep(300);
+      setPvRate(0.5);play();
+      const lim=performance.now()+2000;
+      while(performance.now()<lim&&!(ok()&&S.t>t0+0.01))await sleep(20);
+      if(document.hidden||!(ok()&&S.t>t0+0.01)){pause();return null}
+      const a=S.t,wa=performance.now();await sleep(400);
+      const res={r:(S.t-a)/((performance.now()-wa)/1000),x:probe?probe():null};
+      pause();return res;
+    };
+    const rateTxt=[];
+    const rateChk=(name,res)=>{
+      if(!res){rateTxt.push(name+' sprunget over');log('0,5×',name,'sprunget over (afspilning spærret eller skjult vindue)');return}
+      log('0,5×',name,res.r.toFixed(3),res.x===null?'':JSON.stringify(res.x));
+      if(!(Math.abs(res.r-0.5)<0.1))throw new Error(`0,5× i ${name} gav ${res.r.toFixed(2)}× (S.t mod væguret)`);
+      rateTxt.push(`${name} ${res.r.toFixed(2)}`);
+    };
+    /* Uden musik: billedklippet (S.t += dt × fart) og testklippet, hvor
+       videoelementet er uret (playbackRate = klippets hastighed × fart). */
+    rateChk('billede',await rateRun(0.2,()=>true));
+    if(fT)rateChk('video',await rateRun(1.3,()=>!vActive.paused&&vActive._cid===S.clips[1].id,()=>vActive.playbackRate));
+    setPvRate(1);
     /* Musik: 120 BPM-kicks fra 0,25 s i filen, lagt så de lyder under
        billede B (3-4 s): første kick ved 3,25 s på tidslinjen. Beat-gridet
        estimeres og skal ramme 120 BPM; B får et hvidt blink og puls. */
@@ -5625,6 +6692,19 @@ async function selftest(){
     S.clips[S.clips.length-1].cutFx='flash';
     addTextAtPlayhead();S.texts[0].text='SELVTEST';S.texts[0].start=0;S.texts[0].dur=2;
     addSubAtPlayhead();S.subs[0].text='Undertekst-test';S.subs[0].start=0;S.subs[0].dur=2;
+    /* Med musik-uret: i billede B, hvor musikken spiller (kilden skal have
+       playbackRate 0,5), og i testklippet, der skal følge uret. */
+    let srcRate=0;
+    rateChk('musik',await rateRun(3.1,()=>{if(MUS.src)srcRate=MUS.src.playbackRate.value;return MUS.on}));
+    if(srcRate&&srcRate!==0.5)throw new Error('musikken spilles med playbackRate '+srcRate+' ved 0,5×');
+    if(fT){
+      /* x: videoens afvigelse fra uret i filens tid lige før pausen. */
+      const res=await rateRun(1.3,()=>MUS.on&&!vActive.paused,()=>{
+        const ca=clipAt(S.t);return ca&&isVid(ca.c)&&vActive._cid===ca.c.id?+(vActive.currentTime-(ca.c.in+ca.local*ca.c.speed)).toFixed(4):null});
+      rateChk('video+musik',res);
+      if(res&&!(res.x!==null&&Math.abs(res.x)<0.1))throw new Error('ved 0,5× følger videoen ikke musik-uret (afvigelse '+res.x+' s)');
+    }
+    setPvRate(1);
     renderTL();seekTo(0.5);
     const total=totalDur(),fps=S.proj.fps;
     log('model ok',{clips:S.clips.length,texts:S.texts.length,subs:S.subs.length,total});
@@ -5632,6 +6712,12 @@ async function selftest(){
     drawFrame(0.5,ctx);
     log('drawFrame ok');
     let mp4txt='mp4: springes over (offline)';
+    /* Eksporten ser aldrig previewets fart: MP4 laves nedenfor med 0,25×
+       valgt (varighed, lyd og kick tjekkes som altid), og WebM, der optager
+       gennem preview-motoren, kører 1×. */
+    setPvRate(0.25);
+    webmRec=true;const webmRate=pvRate();webmRec=false;
+    if(webmRate!==1)throw new Error('WebM-optagelsen ville køre '+webmRate+'×');
     if(canMp4()){
       expCancelled=false;
       const blob=await exportMP4(0.08,false,(p,t)=>{if(t===HIDDEN_MSG)stBadge('Selvtest venter: vinduet er skjult',true)},true);
@@ -5661,6 +6747,7 @@ async function selftest(){
       }
       mp4txt=`mp4 ${dur.toFixed(3)} s = tidslinje ${total.toFixed(3)} s${lydTxt} (${blob.size/1024|0} KB)`;
     }
+    setPvRate(1);
     /* Lydkonverteren: testklippets tone som M4A (AAC kopieres, Opus omkodes). */
     let m4txt='';
     if(tone){
@@ -5678,11 +6765,65 @@ async function selftest(){
       if(!(rms>0.15))throw new Error('M4A-filen er stille (RMS '+rms.toFixed(3)+')');
       m4txt=` · m4a ${t.kind==='copy'?'kopieret':'omkodet'} ${ab.duration.toFixed(2)} s`;
     }
+    /* Looks, tekst-animationer, fremdriftslinje og lydvisualisering skal tegne
+       uden fejl og ændre billedet; baglæns skal give testklippets 60 billeder i
+       omvendt orden (firkanten flytter sig 4 px pr. billede); forlæns igen,
+       boomerang, frys billede og find klipskift køres igennem. Tidslinjen
+       stilles tilbage bagefter, så mærke-trinnet ser den som før. */
+    let fxtxt='';
+    {
+      const W=cv.width,H=cv.height,cc=document.createElement('canvas');cc.width=W;cc.height=H;const gg=cc.getContext('2d',{willReadFrequently:true});
+      const sig=t=>{drawFrame(t,gg);const d=gg.getImageData(0,0,W,H).data;let s=0;for(let i=0;i<d.length;i+=36)s+=d[i]+d[i+1]*3+d[i+2]*7;return s};
+      const cA=S.clips[0],keep={...cA.fx},a0=sig(0.5);
+      Object.assign(cA.fx,{glow:0.6,grain:0.5,vignette:0.6,rgb:0.5,vhs:0.5,mirror:3});
+      const a1=sig(0.5);cA.fx=keep;
+      if(a0===a1)throw new Error('looks ændrede ikke billedet');
+      const tx=S.texts[0];
+      for(const an of Object.keys(TX_ANIM)){tx.anim=an;tx.glow=0.5;sig(tx.start+0.05);sig(tx.start+0.3)}
+      tx.anim='';tx.glow=0;
+      S.proj.bar={color:'#19E0FF',pos:'bund',h:1};const b1=sig(1);S.proj.bar=null;
+      if(b1===sig(1))throw new Error('fremdriftslinjen ses ikke');
+      S.music.vis={style:'bars',pos:'bund',size:0.3,opacity:1,color:'neon'};
+      if(!(await visEnsure()))throw new Error('lydvisualiseringen fik ingen frekvensbånd');
+      const v1=sig(3.3);S.music.vis=null;
+      if(v1===sig(3.3))throw new Error('lydvisualiseringen ses ikke');
+      fxtxt=' · looks, tekst, linje og lydvisualisering ok';
+      log('looks/tekst/linje/visualisering ok');
+    }
+    if(fT){
+      const keepClips=JSON.stringify(S.clips),cT=()=>S.clips.find(c=>c.fid===fT.id);
+      /* Firkantens venstre kant i et billede af en video (x i px, rækken midt i firkanten). */
+      const xAt=async(file,t)=>{const im=await createImageBitmap(await grabFrame(file,t)),w=im.width,c=document.createElement('canvas');c.width=w;c.height=im.height;
+        const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(im,0,0);im.close();const d=g.getImageData(0,120,w,1).data;
+        for(let x=0;x<w;x++)if(d[x*4+2]>180&&d[x*4+1]>160&&d[x*4]<120)return x;return -1};
+      const r=await renderReverse(fT.file,0,2,30,{});
+      const rf=new File([r.blob],'st_rev.mp4',{type:'video/mp4'});
+      const x0=await xAt(rf,0.5/30),x59=await xAt(rf,59.5/30);
+      log('baglæns',r.N,'billeder, firkant',x0,'→',x59,'lyd',r.audio);
+      if(r.N!==60||Math.abs(x0-(20+59*4))>2||Math.abs(x59-20)>2)throw new Error(`baglæns: ${r.N} billeder, firkanten står ved ${x0}/${x59} px, ikke ${20+59*4}/20`);
+      await revClip(cT());
+      const rc=S.clips.find(c=>c.rev);
+      if(!rc||!/baglæns/.test(clipName(rc))||!(Math.abs(clipDur(rc)-2)<0.05))throw new Error('klippet blev ikke skiftet til en baglæns kopi');
+      revUndo(rc);
+      if(rc.rev||rc.fid!==fT.id||Math.abs(rc.in)>0.02||Math.abs(rc.out-2)>0.05)throw new Error('forlæns igen gav ikke det oprindelige stykke tilbage');
+      const n0=S.clips.length;await revClip(cT(),true);
+      if(S.clips.length!==n0+1||!S.clips[S.clips.indexOf(cT())+1].rev)throw new Error('boomerang lagde ikke den baglæns del efter klippet');
+      S.clips=JSON.parse(keepClips);renderTL();
+      seekTo(1.5);await mkFrameReady();
+      const n1=S.clips.length;await freezeFrame(cT());
+      const fz=S.clips.find(c=>c.type==='image'&&/frys/.test(clipName(c)));
+      if(S.clips.length!==n1+2||!fz||Math.abs(clipStart(S.clips.indexOf(fz))-1.5)>0.05||fileOf(fz).w!==320)throw new Error('frys billede indsatte ikke et stillbillede ved markøren');
+      S.clips=JSON.parse(keepClips);renderTL();
+      const cuts=await detectCuts(fT.file,0,2,30,{});
+      if(cuts.length)throw new Error('find klipskift fandt '+cuts.length+' snit i et klip uden snit');
+      fxtxt+=' · baglæns, boomerang, frys og klipskift ok';
+      log('baglæns/boomerang/frys/klipskift ok');
+    }
     /* Mærker: et mærke i videoklippet (1-3 s) ved 1,5 s med firkant. Det skal
        stå midt i testklippets billede 15 (30 fps), eksporten skal have tid,
        billede, firkant, type, note og miniature, og mærket skal overleve at
        projektet gemmes og indlæses. */
-    let mktxt='';
+    let mktxt=fxtxt;
     if(fT){
       seekTo(1.5);
       await mkStart();
@@ -5699,10 +6840,10 @@ async function selftest(){
       if(!/^data:image\/jpeg;base64,/.test(m.thumb||''))throw new Error('mærket har ingen miniature');
       applyProject(serializeProject(),{quiet:true});
       if(S.marks.length!==1||!mkSameRect(S.marks[0].rect,m.rect)||!MK.thumbs.has(S.marks[0].id))throw new Error('mærket overlevede ikke at projektet blev gemt og indlæst');
-      mktxt=` · mærke ${m.tc} billede ${m.file_frame}`;
+      mktxt+=` · mærke ${m.tc} billede ${m.file_frame}`;
     }
     log('DONE ✅');
-    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}${mktxt}`,true);
+    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}${mktxt} · 0,5×: ${rateTxt.join(', ')}`,true);
   }catch(e){console.error('[SELFTEST] FAIL ❌',e);stBadge('SELVTEST FEJL: '+(e&&e.message||e),false)}
 }
 
