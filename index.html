@@ -100,7 +100,7 @@ body{
   /* Række 2 er bannerrækken (#notices: kompatibilitet, smal skærm); tom = 0px.
      Panelerne har fast grid-row, så rækken aldrig forskyder dem. */
   /* --tlh: tidslinjens højde, kan trækkes i kanten øverst på #tl. */
-  display:grid;grid-template-rows:46px auto 1fr var(--tlh,300px) 24px;
+  display:grid;grid-template-rows:46px auto 1fr var(--tlh,332px) 24px;
   user-select:none;-webkit-user-select:none;
 }
 input,select,textarea,button{font:inherit;color:inherit}
@@ -306,12 +306,13 @@ body.focusMode #main{grid-template-columns:1fr}
 #tlInner{position:relative;height:100%;min-width:100%}
 #ruler{position:absolute;top:0;left:0;height:26px;cursor:pointer}
 .track{position:absolute;left:0;right:0;border-bottom:1px solid var(--line)}
-/* Fem rækker: lineal 26 · video 80 · tekst 46 · undertekst 46 · musik 48.
-   Ændres de, skal #tlLabels og TLH_MIN følge med. */
-#trClips{top:26px;height:80px}
-#trTexts{top:106px;height:46px}
-#trSubs{top:152px;height:46px}
-#trMusic{top:198px;height:48px}
+/* Seks rækker: lineal 26 · mærker 32 · video 80 · tekst 46 · undertekst 46 ·
+   musik 48. Ændres de, skal #tlLabels, TLH_MIN og MUS_LANE_Y følge med. */
+#trMarks{top:26px;height:32px}
+#trClips{top:58px;height:80px}
+#trTexts{top:138px;height:46px}
+#trSubs{top:184px;height:46px}
+#trMusic{top:230px;height:48px}
 /* Bølgeformen ligger UNDER sporene (musikblokken er halvgennemsigtig ovenpå),
    beat-stregerne OVER dem, så de også ses hen over klippene. Begge følger
    rulningen som linealen og fanger aldrig klik. */
@@ -345,8 +346,67 @@ body.focusMode #main{grid-template-columns:1fr}
 .blk:hover .hnd{background:rgba(255,255,255,.22)}
 #playhead{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--err-fill);z-index:8;pointer-events:none}
 #playhead::before{content:'';position:absolute;top:0;left:-7px;border:6px solid transparent;border-top:8px solid var(--err-fill)}
-#tlEmpty{position:absolute;top:38px;left:0;right:0;text-align:center;color:var(--faint);pointer-events:none;font-size:12px}
+#tlEmpty{position:absolute;top:70px;left:0;right:0;text-align:center;color:var(--faint);pointer-events:none;font-size:12px}
 .ghostLine{position:absolute;top:26px;bottom:0;width:0;border-left:2px dashed var(--warn);z-index:7;pointer-events:none;display:none}
+
+/* ---------- Mærker (mærk steder i billedet) ----------
+   Sporet under linealen: shot-tabellens felter som baggrund og mærkerne som
+   nåle. Mærkerne er ravgule (DS'ets warn: noget der skal ses på), så de ikke
+   forveksles med den røde markør, og nummeret i hovedet bærer identiteten,
+   så farve ikke står alene. Et klik på et shot-felt søger som på sporet. */
+.shotSeg{position:absolute;top:0;bottom:0;background:var(--gt-pl-1);border-right:1px solid var(--gt-edge-hair);
+  padding:0 5px;overflow:hidden;white-space:nowrap;font-family:var(--gt-font-ui);font-size:var(--gt-t-xs);
+  line-height:1;color:var(--faint);display:flex;align-items:flex-end;padding-bottom:4px;cursor:pointer}
+.shotSeg.alt{background:var(--gt-pl-2)}
+/* Over markøren (z 8): står man på et mærke, skal dets nummer stadig ses. */
+.mkPin{position:absolute;top:0;bottom:0;width:20px;margin-left:-10px;z-index:9;cursor:pointer}
+.mkPin::before{content:'';position:absolute;left:9px;top:0;bottom:0;width:2px;background:var(--gt-warn)}
+.mkPin .hd{position:absolute;left:50%;top:2px;transform:translateX(-50%);min-width:18px;height:18px;padding:0 4px;border-radius:9px;
+  background:var(--gt-warn);color:var(--gt-ink-on-lit);font:700 var(--gt-t-xs)/18px var(--gt-font-ui);text-align:center;
+  font-feature-settings:"tnum" 1;box-shadow:0 0 0 1px rgba(0,0,0,.7)}
+.mkPin:hover .hd{filter:brightness(1.12)}
+.mkPin.sel .hd{box-shadow:0 0 0 2px var(--gt-sig),0 0 0 3px rgba(0,0,0,.8)}
+.mkPin:focus-visible{outline:none}
+.mkPin:focus-visible .hd{box-shadow:var(--gt-focus-ring)}
+#mkLaneHint{position:absolute;left:10px;top:9px;font-size:var(--gt-t-xs);color:var(--faint);pointer-events:none;white-space:nowrap}
+/* Mærk-tilstand: det frosne billede ligger oven på preview-lærredet, så
+   firkanten tegnes på netop det billede der gemmes. #mkShow viser firkanterne
+   for mærkerne på det billede der står stille i preview. */
+#mkOv,#mkShow{position:absolute;left:0;top:0;width:0;height:0}
+#mkOv{display:none;cursor:crosshair;touch-action:none;z-index:5}
+#mkOv.on{display:block}
+#mkFrz{position:absolute;left:0;top:0;width:100%;height:100%;border-radius:var(--gt-r-2);box-shadow:0 0 0 2px var(--gt-warn),var(--shadow)}
+#mkShow{pointer-events:none;z-index:4}
+.mkBox{position:absolute;border:2px solid var(--gt-warn);background:rgba(255,138,31,.10);
+  box-shadow:0 0 0 1px rgba(0,0,0,.75),inset 0 0 0 1px rgba(0,0,0,.75);pointer-events:none}
+.mkBox .n{position:absolute;left:-2px;bottom:100%;min-width:18px;padding:0 4px;border-radius:var(--gt-r-1) var(--gt-r-1) 0 0;
+  background:var(--gt-warn);color:var(--gt-ink-on-lit);font:700 var(--gt-t-xs)/16px var(--gt-font-ui);text-align:center}
+.mkBox.top .n{bottom:auto;top:0;border-radius:0 0 var(--gt-r-1) 0}
+#mkTip{position:absolute;left:50%;top:10px;transform:translateX(-50%);max-width:calc(100% - 20px);padding:4px 12px;
+  border-radius:var(--gt-r-3);background:rgba(5,6,9,.82);border:1px solid var(--gt-warn);color:var(--txt);
+  font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+#tShot{font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1;color:var(--dim);font-size:12px;margin-left:8px}
+/* Inspektøren: liste, miniature og typevalg */
+.mkInfo{font-size:var(--gt-t-xs);color:var(--faint);line-height:1.6;margin-bottom:8px}
+.mkInfo b{color:var(--txt);font-family:var(--gt-font-ui);font-feature-settings:"tnum" 1}
+/* Lodrette projekter: miniaturen holdes lav og vises helt (sorte kanter). */
+.mkThumb{width:100%;max-height:260px;object-fit:contain;display:block;border-radius:var(--gt-r-3);background:#000;margin-bottom:8px}
+.mkTypes{display:flex;flex-wrap:wrap;gap:5px;margin:-2px 0 9px}
+.mkList{max-height:330px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--gt-r-2);background:var(--gt-sub-1);margin-bottom:8px}
+.mkItem{display:flex;align-items:stretch;border-bottom:1px solid var(--line)}
+.mkItem:last-child{border-bottom:none}
+.mkItem:hover{background:var(--panel3)}
+.mkItem.on{background:var(--gt-pl-3);box-shadow:inset 3px 0 0 var(--gt-sig)}
+.mkGo{flex:1;min-width:0;display:flex;gap:8px;align-items:flex-start;padding:6px 4px 6px 8px;background:none;border:none;text-align:left;cursor:pointer;border-radius:var(--gt-r-1)}
+.mkGo img,.mkGo .noth{width:80px;height:45px;object-fit:contain;flex:none;border-radius:var(--gt-r-1);background:#000;display:block}
+.mkGo .noth{display:flex;align-items:center;justify-content:center;color:var(--gt-ink-4)}
+.mkGo .tx{min-width:0;flex:1;font-size:11.5px;line-height:1.4}
+.mkGo .tt{display:flex;align-items:center;gap:6px;color:var(--acc2);font-family:var(--gt-font-ui);font-weight:600;font-feature-settings:"tnum" 1}
+.mkGo .no{min-width:18px;padding:0 4px;border-radius:9px;background:var(--gt-warn);color:var(--gt-ink-on-lit);font-weight:700;line-height:16px;text-align:center}
+.mkGo .ty{color:var(--gt-warn-ink)}
+.mkGo .nt{color:var(--dim);white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.mkRm{flex:none;display:inline-flex;align-items:center;padding:6px 8px;background:none;border:none;color:var(--faint);cursor:pointer;border-radius:var(--gt-r-1)}
+.mkRm:hover{color:var(--err)}
 
 /* ---------- Statusbar ---------- */
 #status{grid-row:5;display:flex;align-items:center;gap:14px;padding:0 12px;background:var(--panel);border-top:1px solid var(--line);font-size:var(--gt-t-xs);color:var(--faint);white-space:nowrap;overflow:hidden}
@@ -525,6 +585,12 @@ textarea:focus-visible,
   <div id="previewWrap">
     <div id="stage">
       <canvas id="cv" width="1080" height="1920"></canvas>
+      <div id="mkShow"></div>
+      <div id="mkOv">
+        <canvas id="mkFrz" width="1" height="1"></canvas>
+        <div class="mkBox" id="mkBox" hidden></div>
+        <div id="mkTip">Træk en firkant om fejlen · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> gemmer · <kbd>Esc</kbd> annullerer</div>
+      </div>
       <div id="stageHint">
         <div class="big"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-play"></use></svg></div>
         <div>Dobbeltklik på et medie for at lægge det på tidslinjen</div>
@@ -537,7 +603,7 @@ textarea:focus-visible,
       <button class="pbtn" id="btnNextF" title="1 billede frem (→)" aria-label="1 billede frem"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-step-fwd"></use></svg></button>
       <button class="pbtn" id="btnEnd" title="Til slut (End)" aria-label="Til slut"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-skip-fwd"></use></svg></button>
       <div class="sep"></div>
-      <span id="tcur">00:00.00</span>&nbsp;<span id="ttot">/ 00:00.00</span>
+      <span id="tcur">00:00.00</span>&nbsp;<span id="ttot">/ 00:00.00</span><span id="tShot" title="Shot under markøren (fra shot-tabellen)" hidden></span>
       <div class="grow"></div>
       <div id="volWrap"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-speaker"></use></svg> <input type="range" id="masterVol" min="0" max="1" step="0.01" value="1" style="width:80px" title="Hovedlydstyrke" aria-label="Hovedlydstyrke"></div>
     </div>
@@ -562,6 +628,7 @@ textarea:focus-visible,
     <div class="sep"></div>
     <button class="tbtn" id="btnAddText" title="Ny tekst ved markøren (T)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</button>
     <button class="tbtn" id="btnAddSub" title="Ny undertekst ved markøren (U)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</button>
+    <button class="tbtn" id="btnMark" title="Mærk et sted i billedet, fx en fejl (M)"><svg class="gi" aria-hidden="true"><use href="icons.svg#gi-target"></use></svg> Mærk</button>
     <div class="sep"></div>
     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);cursor:pointer">
       <input type="checkbox" id="snapChk" checked style="accent-color:var(--acc)"> Snap
@@ -576,6 +643,7 @@ textarea:focus-visible,
   <div id="tlBody">
     <div id="tlLabels">
       <div style="height:26px"></div>
+      <div style="height:32px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-target"></use></svg> Mærker</div>
       <div style="height:80px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-film"></use></svg> Video</div>
       <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-text"></use></svg> Tekst</div>
       <div style="height:46px"><svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-caption"></use></svg> Undertekst</div>
@@ -585,6 +653,7 @@ textarea:focus-visible,
       <div id="tlInner">
         <canvas id="ruler" height="26"></canvas>
         <canvas id="waveCv"></canvas>
+        <div class="track" id="trMarks"></div>
         <div class="track" id="trClips"></div>
         <div class="track" id="trTexts"></div>
         <div class="track" id="trSubs"></div>
@@ -603,7 +672,7 @@ textarea:focus-visible,
   <span id="stSel"></span>
   <span id="stSnap"></span>
   <span class="grow"></span>
-  <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> del · <kbd>T</kbd>/<kbd>U</kbd> tekst · <kbd>←→</kbd> billede · <kbd>Alt+←→</kbd> flyt · <kbd>Ctrl+Z</kbd> fortryd · <kbd>F</kbd> fokus · <kbd>Del</kbd> slet</span>
+  <span><kbd>Mellemrum</kbd> afspil · <kbd>S</kbd> del · <kbd>T</kbd>/<kbd>U</kbd> tekst · <kbd>M</kbd> mærk · <kbd>←→</kbd> billede · <kbd>Alt+←→</kbd> flyt · <kbd>Ctrl+Z</kbd> fortryd · <kbd>F</kbd> fokus · <kbd>Del</kbd> slet</span>
 </div>
 
 <div id="modalBack">
@@ -678,6 +747,8 @@ textarea:focus-visible,
 <input type="file" id="projInput" accept=".json" style="display:none">
 <input type="file" id="gridInput" accept=".json,application/json" style="display:none">
 <input type="file" id="acInput" multiple accept=".mp4,.m4v,.mov,video/mp4,video/quicktime" style="display:none">
+<input type="file" id="mkInput" accept=".json,application/json" style="display:none">
+<input type="file" id="shotInput" accept=".json,application/json" style="display:none">
 
 <script src="./mp4-muxer.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';s.onload=function(){if(typeof netBadgeUpdate==='function')netBadgeUpdate()};document.head.appendChild(s)})()"></script>
 <script>
@@ -734,6 +805,13 @@ const S={
      start = hvor på tidslinjen filen begynder at lyde, in = hvor i filen.
      Med i fortryd-historikken (snap), autosave, projektfil og genforbindelse. */
   music:null,
+  /* Mærker (mærk steder i billedet): {id,t,type,note,rect,src,shot?,created}
+     t = tid på tidslinjen (midt i billedet), rect = {x,y,w,h} i andele af
+     billedet som det blev vist (null = intet område), src = kilden der blev
+     vist {name,clip,t?,fps?,rect?}. Miniaturerne ligger i MK.thumbs/IndexedDB,
+     ikke her. shots = shot-tabellen {name,file,rows:[{slot,t0,t1,shot,clip,in}],types}
+     i videofilens tid. Begge er med i fortryd, autosave og projektfil. */
+  marks:[], shots:null,
   t:0, playing:false, sel:{kind:null,id:null}, filter:'all',
   pxPerSec:60, masterVol:1, dirty:false, dirHandle:null
 };
@@ -829,8 +907,11 @@ addEventListener('drop',e=>{
   /* Åben lydkonverter: filerne skal i konverterens liste, ikke i biblioteket. */
   if($('acBack').classList.contains('open')){if(!AC.busy)acAdd([...e.dataTransfer.files]);return}
   const all=[...e.dataTransfer.files],fs=all.filter(f=>isMediaName(f.name));
+  /* JSON: mærker (fra eksporten) eller en shot-tabel (fx slots.json). */
+  const js=all.filter(f=>/\.json$/i.test(f.name));
+  if(js.length&&typeof mkDropJson==='function')mkDropJson(js);
   if(fs.length)addMediaFiles(fs);
-  else if(all.length)toast('Ingen video-, billed- eller lydfiler blandt de slupne filer','err');
+  else if(all.length&&!js.length)toast('Ingen video-, billed- eller lydfiler blandt de slupne filer','err');
 });
 
 async function addMediaFiles(files,opts){
@@ -847,7 +928,7 @@ async function addMediaFiles(files,opts){
       const old=S.files.find(x=>x.name===f.name&&x.src&&x.src===opts.dir);
       if(!old)continue;
       try{URL.revokeObjectURL(old.url)}catch(e){}
-      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null});
+      Object.assign(old,{file:f,url:URL.createObjectURL(f),size:f.size,mtime:f.lastModified||0,dur:0,w:0,h:0,thumb:null,imgEl:null,err:null,probing:true,peaks:null,abuf:null,abufP:null,fps:null,fpsP:null});
       for(const v of[vA,vB])if(v._fid===old.id){v._fid=null;v._cid=null}
       replaced.push(old);
     }
@@ -1242,6 +1323,26 @@ function drawCutFx(c2,c,local,W,H){
   if(a<=0)return;
   c2.save();c2.fillStyle=`rgba(${col},${a.toFixed(3)})`;c2.fillRect(0,0,W,H);c2.restore();
 }
+/* Hvor klippets billede (sw×sh) lander på et lærred W×H: tilpasning, Ken
+   Burns, zoom-stød og puls. drawFrame tegner efter den, og mærkerne regner
+   deres firkant om til kildens eget billede med den. */
+function clipPlace(ca,t,sw,sh,W,H){
+  const c=ca.c,d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
+  const fitIn=c.fit==='contain'||c.fit==='blur';
+  let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
+  /* Klipskift-effekten hører til skiftet ind i klippet; første klip har intet. */
+  const bump=(ca.i>0?cutFxScale(c,ca.local):1)*pulseScale(t);
+  let ox=0,oy=0;
+  if(c.type==='image'&&c.kb){
+    const k=c.kb,z=lerp(k.zs,k.ze,p);scale*=z;
+    const overW=sw*scale-W,overH=sh*scale-H;
+    ox=lerp(k.pxs||0,k.pxe||0,p)*Math.max(0,overW)/2;
+    oy=lerp(k.pys||0,k.pye||0,p)*Math.max(0,overH)/2;
+  }
+  /* Zoom-stød og puls skalerer billedet om midten (panoreringen med). */
+  const dw=sw*scale*bump,dh=sh*scale*bump;ox*=bump;oy*=bump;
+  return{x:(W-dw)/2+ox,y:(H-dh)/2+oy,w:dw,h:dh};
+}
 function drawFrame(t,c2,opts){
   opts=opts||{};
   const W=c2.canvas.width,H=c2.canvas.height;
@@ -1265,26 +1366,13 @@ function drawFrame(t,c2,opts){
       }
     }else if(it&&it.imgEl){src=it.imgEl;sw=it.w;sh=it.h}
     if(src&&sw&&sh){
-      const d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
-      const fitIn=c.fit==='contain'||c.fit==='blur';
-      let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
-      /* Klipskift-effekten hører til skiftet ind i klippet; første klip har intet. */
-      const bump=(ca.i>0?cutFxScale(c,ca.local):1)*pulseScale(t);
       /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
       if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fadeGain(c,ca.local),hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
-      let ox=0,oy=0;
-      if(c.type==='image'&&c.kb){
-        const k=c.kb,z=lerp(k.zs,k.ze,p);scale*=z;
-        const overW=sw*scale-W,overH=sh*scale-H;
-        ox=lerp(k.pxs||0,k.pxe||0,p)*Math.max(0,overW)/2;
-        oy=lerp(k.pys||0,k.pye||0,p)*Math.max(0,overH)/2;
-      }
-      /* Zoom-stød og puls skalerer billedet om midten (panoreringen med). */
-      const dw=sw*scale*bump,dh=sh*scale*bump;ox*=bump;oy*=bump;
+      const r=clipPlace(ca,t,sw,sh,W,H);
       c2.save();
       c2.filter=fxFilter(c.fx,bFac);
       c2.globalAlpha=fadeGain(c,ca.local);
-      try{c2.drawImage(src,(W-dw)/2+ox,(H-dh)/2+oy,dw,dh)}catch(e){}
+      try{c2.drawImage(src,r.x,r.y,r.w,r.h)}catch(e){}
       c2.restore();
     }
   }
@@ -1801,6 +1889,8 @@ function updateTimeUI(){
     const sc=$('tlScroll'),x=S.t*S.pxPerSec;
     if(x<sc.scrollLeft+40||x>sc.scrollLeft+sc.clientWidth-60)sc.scrollLeft=x-sc.clientWidth*0.3;
   }
+  /* Shot under markøren og firkanterne for mærker på det viste billede. */
+  if(typeof mkTimeUI==='function')mkTimeUI();
 }
 requestAnimationFrame(t=>{lastWall=t;tick(t)});
 
@@ -1824,10 +1914,12 @@ function select(kind,id){
   const binOn=kind==='file'||kind==='files';
   document.querySelectorAll('.mcard').forEach(x=>{const on=binOn&&S.binSel.has(x.dataset.id);x.classList.toggle('sel',on);x.setAttribute('aria-pressed',on?'true':'false')});
   if(typeof updateAddAll==='function')updateAddAll();
-  document.querySelectorAll('.blk.sel').forEach(x=>x.classList.remove('sel'));
+  document.querySelectorAll('.blk.sel,.mkPin.sel').forEach(x=>x.classList.remove('sel'));
   if(kind==='clip'||kind==='text'||kind==='sub'){const el=document.querySelector(`.blk[data-id="${id}"]`);if(el)el.classList.add('sel')}
   if(kind==='music'){const el=document.querySelector('.blk.mus');if(el)el.classList.add('sel')}
+  if(kind==='mark'){const el=document.querySelector(`.mkPin[data-id="${id}"]`);if(el)el.classList.add('sel')}
   renderInsp();updateSelStatus();
+  if(typeof mkTimeUI==='function')mkTimeUI(true);
 }
 function deselect(){select(null,null)}
 const musicName=()=>S.music?(S.music.missing?S.music.missing.name:((fileOf(S.music)||{}).name||'?')):'';
@@ -1837,6 +1929,7 @@ function updateSelStatus(){
   else if(k==='music')s=S.music?`Valgt: musik — ${S.music.missing?'mangler fil — ':''}${musicName()}`:'';
   else if(k==='text')s='Valgt: tekst';
   else if(k==='sub')s='Valgt: undertekst';
+  else if(k==='mark'){const m=S.marks.find(x=>x.id===S.sel.id);s=m?`Valgt: mærke ${S.marks.indexOf(m)+1} — ${m.type}`:''}
   else if(k==='file'){const f=S.files.find(x=>x.id===S.sel.id);s=f?`Valgt i bibliotek: ${f.name}`:''}
   else if(k==='files')s=`Valgt i bibliotek: ${S.binSel.size} medier (Shift/Ctrl+klik)`;
   $('stSel').textContent=s;
@@ -1924,6 +2017,7 @@ function renderTL(){
   renderOverlayTrack($('trTexts'),S.texts,'txt','text');
   renderOverlayTrack($('trSubs'),S.subs,'sub','sub');
   renderMusicTrack();
+  if(typeof renderMarkTrack==='function')renderMarkTrack();
   drawRuler();updateTimeUI();updSnapStatus();
 }
 /* Musiksporet: én blok fra start med filens resterende længde. Bølgeformen
@@ -2162,7 +2256,7 @@ function tlCanvas(cvEl){
   const g=cvEl.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
   return{g,w,h};
 }
-const MUS_LANE_Y=198-26;   /* musiksporets top i lærredets koordinater (lærredet starter under linealen) */
+const MUS_LANE_Y=230-26;   /* musiksporets top i lærredets koordinater (lærredet starter under linealen) */
 /* Bølgeform: højeste top pr. pixelkolonne; fades vises som kurvens form.
    Den del der ligger efter videoens slutning (høres ikke) tegnes dæmpet. */
 function drawWave(){
@@ -2217,14 +2311,15 @@ ruler.addEventListener('pointerdown',e=>{
   const up=()=>{ruler.removeEventListener('pointermove',mv);ruler.removeEventListener('pointerup',up)};
   ruler.addEventListener('pointermove',mv);ruler.addEventListener('pointerup',up);
 });
-for(const id of['trClips','trTexts','trSubs','trMusic'])$(id).addEventListener('pointerdown',e=>{
-  if(e.target.classList.contains('track')){seekFromEvent(e);deselect()}
+/* Et klik på et tomt sted i et spor (eller på et shot-felt) søger. */
+for(const id of['trMarks','trClips','trTexts','trSubs','trMusic'])$(id).addEventListener('pointerdown',e=>{
+  if(e.target.classList.contains('track')||e.target.classList.contains('shotSeg')){seekFromEvent(e);deselect()}
 });
 /* Tidslinjens højde: træk i kanten, piletaster på kanten, dobbeltklik =
-   standard. Gulvet er hvad sporene fylder (lineal 26 + 80 + 46 + 46 + musik
-   48 + værktøjer 34 + kant + vandret rullebjælke 10); loftet 55 % af
-   vinduet. Huskes pr. browser. */
-const TLH_MIN=292,TLH_DEF=300;
+   standard. Gulvet er hvad sporene fylder (lineal 26 + mærker 32 + 80 + 46 +
+   46 + musik 48 + værktøjer 34 + kant + vandret rullebjælke 10); loftet 55 %
+   af vinduet. Huskes pr. browser. */
+const TLH_MIN=324,TLH_DEF=332;
 function setTlh(h,save){
   const max=Math.round(Math.max(TLH_MIN,innerHeight*0.55));
   h=Math.round(clamp(h,TLH_MIN,max));
@@ -2320,6 +2415,7 @@ function deleteSelected(){
   else if(k==='text'){S.texts=S.texts.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet tekst');invalidate()}
   else if(k==='sub'){S.subs=S.subs.filter(x=>x.id!==S.sel.id);deselect();renderTL();markDirty('slet undertekst');invalidate()}
   else if(k==='music')removeMusic();
+  else if(k==='mark')mkDelete(S.sel.id);
 }
 function duplicateSelected(){
   const k=S.sel.kind;
@@ -2343,6 +2439,7 @@ $('btnDel').onclick=deleteSelected;
 $('btnDup').onclick=duplicateSelected;
 $('btnAddText').onclick=addTextAtPlayhead;
 $('btnAddSub').onclick=addSubAtPlayhead;
+$('btnMark').onclick=()=>mkStart();
 </script>
 <script>
 /* ================================================================
@@ -2418,15 +2515,29 @@ function sec(parent,title,miniLabel,miniCb){
 }
 
 function renderInsp(){
-  const B=$('inspBody');B.innerHTML='';
-  const c=selClip(),tx=selText(),su=selSub();
-  if(c){inspClip(B,c)}
+  const B=$('inspBody');
+  /* Mærkelisten beholder sin rulning, når inspektøren tegnes om. */
+  const ml=B.querySelector('.mkList'),mlTop=ml?ml.scrollTop:0;
+  B.innerHTML='';
+  const c=selClip(),tx=selText(),su=selSub(),mk=S.sel.kind==='mark'?S.marks.find(x=>x.id===S.sel.id):null;
+  /* Et mærke der er ved at blive sat, ejer inspektøren til det er gemt. */
+  if(typeof MK!=='undefined'&&MK.pending){inspMarkNew(B)}
+  else if(c){inspClip(B,c)}
   else if(tx){inspText(B,tx)}
   else if(su){inspSub(B,su)}
+  else if(mk){inspMark(B,mk)}
   else if(S.sel.kind==='music'&&S.music){inspMusic(B)}
   else if(S.sel.kind==='file'){inspFile(B)}
   else if(S.sel.kind==='files'){inspFiles(B)}
   else{inspProject(B)}
+  const nl=B.querySelector('.mkList');
+  if(nl){
+    nl.scrollTop=mlTop;
+    /* Det valgte mærke rulles frem i listen (kun i listen, ikke i inspektøren). */
+    const on=nl.querySelector('.mkItem.on');
+    if(on){const lr=nl.getBoundingClientRect(),ir=on.getBoundingClientRect();
+      if(ir.top<lr.top)nl.scrollTop-=lr.top-ir.top;else if(ir.bottom>lr.bottom)nl.scrollTop+=ir.bottom-lr.bottom}
+  }
 }
 function inspClip(B,c){
   const it=fileOf(c);
@@ -2723,6 +2834,8 @@ function inspProject(B){
     bm.onclick=()=>select('music',null);
     const r=el('div','btnRow');r.appendChild(bm);sm.appendChild(r);
   }else sm.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);line-height:1.6">Dobbeltklik på en lydfil (mp3, wav, m4a, aac, ogg, opus, flac) i biblioteket for at lægge den som musik.</div>`));
+  /* Mærker og shot-tabel (mærk steder i billedet). */
+  if(typeof inspMarksShared==='function'){inspMarksShared(B);inspShots(B)}
   const s1=sec(B,'Format');
   const resSel=el('select');
   /* "Automatisk" er standard: projektet følger første klip (snappet til
@@ -2753,14 +2866,14 @@ function inspProject(B){
   const s2=sec(B,'Statistik');
   s2.appendChild(el('div',null,`<div style="font-size:12px;color:var(--dim);line-height:1.8">
     Klip på tidslinjen: <b style="color:var(--txt)">${S.clips.length}</b><br>
-    Tekster: <b style="color:var(--txt)">${S.texts.length}</b> · Undertekster: <b style="color:var(--txt)">${S.subs.length}</b><br>
+    Tekster: <b style="color:var(--txt)">${S.texts.length}</b> · Undertekster: <b style="color:var(--txt)">${S.subs.length}</b> · Mærker: <b style="color:var(--txt)">${S.marks.length}</b><br>
     Samlet varighed: <b style="color:var(--txt)">${fmtT(totalDur())}</b><br>
     Medier i bibliotek: <b style="color:var(--txt)">${S.files.length}</b></div>`));
   const s3=sec(B,'Projekt');
   s3.appendChild(el('div',null,`<div style="font-size:var(--gt-t-xs);color:var(--faint);margin-bottom:8px">Gemmes automatisk i browseren. Brug ${ICO('save')} Gem for en projektfil du kan dele/flytte.</div>`));
   const br=el('div','btnRow');
   const bc=el('button','sbtn danger','Ryd tidslinjen');
-  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster og undertekster fra tidslinjen?')){backupAutosave('før Ryd tidslinjen');S.clips=[];S.texts=[];S.subs=[];deselect();renderTL();markDirty('ryd tidslinjen');invalidate();$('stageHint').style.display='flex'}};
+  bc.onclick=()=>{if(confirm('Fjern alle klip, tekster, undertekster og mærker fra tidslinjen?')){backupAutosave('før Ryd tidslinjen');S.clips=[];S.texts=[];S.subs=[];S.marks=[];S.shots=null;deselect();renderTL();markDirty('ryd tidslinjen');invalidate();$('stageHint').style.display='flex'}};
   br.appendChild(bc);s3.appendChild(br);
   /* Backup: autosavens "færre klip"-kopi (LSPREV) og ringen af udskiftede
      projekter (før Indlæs/Ryd/gendannelse, fra en anden fane). Kopier af det
@@ -2815,6 +2928,8 @@ function serializeProject(){
     texts:S.texts.map(t=>({...t})),subs:S.subs.map(s=>({...s})),
     music:S.music?(()=>{const m=S.music,it=musicFile();return{...m,fid:undefined,missing:undefined,
       fileName:it?it.name:(m.missing?m.missing.name:'?'),fileSize:it?it.size:(m.missing&&m.missing.size||undefined),fileDur:musicFileDur()||undefined}})():null,
+    /* Mærkerne uden miniaturer (de ligger i IndexedDB; Gem lægger dem i filen). */
+    marks:S.marks.map(m=>({...m})),shots:S.shots,
     masterVol:S.masterVol,savedAt:Date.now()
   };
 }
@@ -2887,9 +3002,12 @@ function applyProject(p,opts){
   if(S.playing)pause();
   S.music=parseMusic(p.music,num);
   if(S.music&&S.music.missing)missing.push(S.music.missing.name);
+  /* Mærker og shot-tabel; miniaturer i filen (Gem) lægges i MK.thumbs. */
+  if(typeof mkParseMarks==='function'){S.marks=mkParseMarks(p.marks,num);S.shots=mkParseShots(p.shots,num)}
   freeMusicBufs();
   ensureMusicBuf();
   applyProjSize();renderTL();invalidate();deselect();
+  if(typeof mkAfterLoad==='function')mkAfterLoad();
   $('stageHint').style.display=S.clips.length?'none':'flex';
   if(missing.length&&!opts.quiet)toast(`${missing.length} ${missing.length===1?'medie venter på sin fil':'medier venter på deres filer'} (${[...new Set(missing)].slice(0,3).join(', ')}${missing.length>3?' …':''}) — åbn mappen med dem`,'err');
   return missing.length;
@@ -2920,6 +3038,8 @@ function relinkMissing(opts){
     renderTL();renderInsp();renderBin();invalidate();seekTo(clamp(S.t,0,totalDur()));
     toast(`${n?`${n} klip`:''}${n&&nm?' og ':''}${nm?'musikken':''} genforbundet med ${n+nm===1?'sin fil':'deres filer'} ✓`,'ok');
   }
+  /* Mærker uden kildens billedfrekvens (importerede) får den, når filen er her. */
+  if(typeof mkFillFps==='function')mkFillFps();
   return n+nm;
 }
 function readPrevAutosave(){
@@ -2936,7 +3056,7 @@ const clipCountOf=raw=>{try{const p=JSON.parse(raw);return p&&Array.isArray(p.cl
 const LSBAK='mediestudio_v1_backups',BAK_MAX=5;
 /* Denne fanes id: gemmes i autosaven, så en anden fanes skrivning kan kendes. */
 const TAB_ID=Math.random().toString(36).slice(2,10)+Date.now().toString(36);
-const projHasContent=p=>!!(p&&typeof p==='object'&&((Array.isArray(p.clips)&&p.clips.length)||(Array.isArray(p.texts)&&p.texts.length)||(Array.isArray(p.subs)&&p.subs.length)||(p.music&&typeof p.music==='object')));
+const projHasContent=p=>!!(p&&typeof p==='object'&&((Array.isArray(p.clips)&&p.clips.length)||(Array.isArray(p.texts)&&p.texts.length)||(Array.isArray(p.subs)&&p.subs.length)||(Array.isArray(p.marks)&&p.marks.length)||(p.music&&typeof p.music==='object')));
 const projKey=p=>{try{const{savedAt,tab,...rest}=p;return JSON.stringify(rest)}catch(e){return ''}};
 function readBackups(){
   if(SELFTEST)return[];
@@ -3017,7 +3137,7 @@ let ptrDown=false;
 addEventListener('pointerdown',()=>{ptrDown=true},true);
 addEventListener('pointerup',()=>{ptrDown=false},true);
 addEventListener('pointercancel',()=>{ptrDown=false},true);
-function snap(){return JSON.stringify({clips:S.clips,texts:S.texts,subs:S.subs,subStyle:S.subStyle,proj:S.proj,projManual:!!S.projManual,music:S.music})}
+function snap(){return JSON.stringify({clips:S.clips,texts:S.texts,subs:S.subs,subStyle:S.subStyle,proj:S.proj,projManual:!!S.projManual,music:S.music,marks:S.marks,shots:S.shots})}
 function histReset(){clearTimeout(HIST.timer);HIST.timer=0;HIST.past=[];HIST.future=[];HIST.label=null;HIST.cur=snap();updUndoBtns()}
 function histCommit(){
   if(ptrDown){HIST.timer=setTimeout(histCommit,250);return}
@@ -3036,7 +3156,9 @@ function restoreSnap(s){
   S.clips=o.clips;S.texts=o.texts;S.subs=o.subs;
   Object.assign(S.subStyle,o.subStyle);Object.assign(S.proj,o.proj);
   S.projManual=!!o.projManual;S.music=o.music==null?null:o.music;
+  S.marks=Array.isArray(o.marks)?o.marks:[];S.shots=o.shots||null;
   if(S.sel.kind==='music'&&!S.music)S.sel={kind:null,id:null};
+  if(S.sel.kind==='mark'&&!S.marks.some(m=>m.id===S.sel.id))S.sel={kind:null,id:null};
   relinkMissing({silent:true});   /* filer importeret siden trinnet blev taget */
   freeMusicBufs(prevMusicFid);
   applyProjSize();renderTL();renderInsp();renderBin();
@@ -3087,13 +3209,19 @@ async function saveBlob(blob,fileName,types){
   toast('Downloadet: '+fileName+' ✓','ok');return true;
 }
 $('btnSaveProj').onclick=()=>{
-  const blob=new Blob([JSON.stringify(serializeProject(),null,1)],{type:'application/json'});
+  const p=serializeProject();
+  /* Projektfilen har mærkernes miniaturer med, så den kan flyttes til en anden maskine. */
+  p.marks=p.marks.map(m=>{const d=MK.thumbs.get(m.id);return d?{...m,thumb:d}:m});
+  const blob=new Blob([JSON.stringify(p,null,1)],{type:'application/json'});
   saveBlob(blob,($('projName').value||'projekt')+'.mediestudio.json',[{description:'MedieStudio projekt',accept:{'application/json':['.json']}}]);
 };
 $('btnLoadProj').onclick=()=>$('projInput').click();
 $('projInput').onchange=async e=>{
   const f=e.target.files[0];if(!f)return;
   try{const p=JSON.parse(await f.text());if(!p||typeof p!=='object')throw new Error('ugyldig');
+    /* En mærkefil eller shot-tabel er ikke et projekt: den lægges ind i det åbne. */
+    const jk=typeof mkJsonKind==='function'?mkJsonKind(p):'';
+    if(jk==='marks'||jk==='shots'){mkUseJson(p,f.name,jk);e.target.value='';return}
     backupAutosave('før Indlæs');const nm=applyProject(p);S.dirty=true;if(typeof histReset==='function')histReset();
     if(nm&&typeof gsRelink==='function')gsRelink();
     if(!nm)toast('Projekt indlæst ✓','ok')}
@@ -3188,6 +3316,7 @@ addEventListener('keydown',e=>{
     case's':case'S':splitAtPlayhead();break;
     case't':case'T':addTextAtPlayhead();break;
     case'u':case'U':addSubAtPlayhead();break;
+    case'm':case'M':e.preventDefault();mkStart();break;
     case'Delete':case'Backspace':deleteSelected();break;
     case'i':case'I':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.in=clamp(c.in+ca.local*c.speed,0,c.out-0.08);renderTL();markDirty('ind-punkt');toast('Ind-punkt sat')}break}
     case'o':case'O':{const c=selClip();const ca=clipAt(S.t);if(c&&ca&&ca.c.id===c.id&&c.type==='video'){c.out=clamp(c.in+ca.local*c.speed,c.in+0.08,(fileOf(c)||{}).dur||c.out);renderTL();markDirty('ud-punkt');toast('Ud-punkt sat')}break}
@@ -4631,6 +4760,756 @@ $('acList').addEventListener('change',e=>{
 </script>
 <script>
 /* ================================================================
+   MÆRKER — mærk steder i billedet (fejl der skal rettes, noter)
+   M fryser billedet ved markøren (midt i kildens billede); man trækker en
+   firkant om fejlen, vælger type og skriver en note. Et mærke hører til ét
+   billede: tiden på tidslinjen og den viste kilde (fil, tid, billede)
+   gemmes, da det blev sat. Mærkerne ligger i S.marks (fortryd, autosave,
+   projektfil); miniaturerne (JPEG med firkanten) i MK.thumbs og IndexedDB,
+   så autosaven i localStorage aldrig fyldes af billeder. Eksporten er én
+   JSON-fil med miniaturer, og den kan skrives løbende til en valgt fil.
+   Shot-tabellen (fx slots.json fra en render) hører til én videofil og
+   regnes i filens tid, så den også passer efter trim og deling.
+   ================================================================ */
+const MK={pending:null,starting:false,thumbs:new Map(),lastType:'',fpsAsked:false,booted:false,
+  live:null,liveStored:null,liveName:'',liveSig:'',liveAt:0,liveBusy:false};
+const MK_TYPES=['Volapyk-tekst','Figur ser forkert ud','Skifter udseende','Glitch / forvrængning','Timing / klip','Andet'];
+const MK_NOTE_MAX=2000,MK_THUMB=480;
+const mkById=id=>S.marks.find(m=>m.id===id);
+const mkNo=m=>S.marks.indexOf(m)+1;   /* S.marks holdes sorteret efter tid */
+const mkR=(v,n)=>{const k=Math.pow(10,n);return Math.round(v*k)/k};
+const mkNum=(v,d,lo,hi)=>{const n=typeof v==='string'&&v.trim()!==''?+v:v;return typeof n==='number'&&Number.isFinite(n)?clamp(n,lo,hi):d};
+const mkSecs=s=>(Math.round(s*100)/100).toLocaleString('da-DK',{minimumFractionDigits:2,maximumFractionDigits:2})+' s';
+const mkFps=f=>mkR(f,3).toLocaleString('da-DK');
+const mkFrameOf=(t,fps)=>Math.floor(t*fps+1e-6);
+const mkCleanType=v=>typeof v==='string'?v.replace(/\s+/g,' ').trim().slice(0,60):'';
+function mkSort(){S.marks.sort((a,b)=>a.t-b.t||(a.created||0)-(b.created||0))}
+function mkCleanRect(r){
+  if(!r||typeof r!=='object')return null;
+  const x=clamp(+r.x||0,0,1),y=clamp(+r.y||0,0,1),w=clamp(+r.w||0,0,1-x),h=clamp(+r.h||0,0,1-y);
+  return w>1e-4&&h>1e-4?{x:mkR(x,4),y:mkR(y,4),w:mkR(w,4),h:mkR(h,4)}:null;
+}
+const mkSameRect=(a,b)=>!!a&&!!b&&['x','y','w','h'].every(k=>Math.abs(a[k]-b[k])<0.002);
+/* Typerne at vælge mellem: shot-tabellens, standardtyperne og dem projektet
+   allerede bruger; Andet til sidst. */
+function mkTypeList(){
+  const out=[],add=t=>{t=mkCleanType(t);if(t&&!out.includes(t))out.push(t)};
+  for(const t of(S.shots&&S.shots.types)||[])add(t);
+  for(const t of MK_TYPES)if(t!=='Andet')add(t);
+  for(const m of S.marks)add(m.type);
+  add('Andet');
+  return out.slice(0,16);
+}
+
+/* ---------- Kilden under markøren ---------- */
+/* Det der vises ved tiden t: fil, klipnummer og (video) tid i filen. */
+function mkSrcAt(t){
+  const ca=clipAt(t);if(!ca)return null;
+  const c=ca.c,it=fileOf(c),o={name:clipName(c),clip:ca.i+1,ca};
+  if(c.type==='video'){o.t=c.in+ca.local*c.speed;o.fps=it&&it.fps>0?it.fps:0}
+  return o;
+}
+const mkSrcPlain=s=>s?{name:s.name,clip:s.clip,...(s.t!=null?{t:mkR(s.t,4)}:{}),...(s.fps>0?{fps:mkR(s.fps,4)}:{})}:null;
+/* Videoens billedfrekvens fra MP4-filens prøvetabel (stts: den hyppigste
+   billedlængde i sporets tidsskala; fragmenteret MP4: trex). WebM o.l. giver
+   0, og så bruges projektets billeder/sek. */
+function mkVideoFps(it){
+  if(!it||it.type!=='video'||!it.file)return Promise.resolve(0);
+  if(it.fps!=null)return Promise.resolve(it.fps);
+  if(!it.fpsP){
+    const file=it.file;
+    it.fpsP=(async()=>{
+      try{
+        const top=await m4Top(file),mb=top.find(x=>x.type==='moov');
+        if(!mb||mb.cut||mb.end-mb.start>1<<27)return 0;
+        const b=await m4Read(file,mb.start,mb.end-mb.start),moov={type:'moov',start:0,hdr:mb.hdr,end:b.length};
+        for(const tk of m4Kids(b,moov)){
+          if(tk.type!=='trak')continue;
+          const hd=m4Get(b,tk,'mdia','hdlr');if(!hd||m4Fcc(b,m4Body(hd)+8)!=='vide')continue;
+          const md=m4Get(b,tk,'mdia','mdhd'),tt=m4Get(b,tk,'mdia','minf','stbl','stts');if(!md)continue;
+          const ts=m4Head(b,md).ts;let d=0,most=0;
+          if(tt){const p=m4Body(tt),n=m4U32(b,p+4);for(let e=0;e<n&&p+16+8*e<=tt.end;e++){const k=m4U32(b,p+8+8*e),v=m4U32(b,p+12+8*e);if(v>0&&k>most){most=k;d=v}}}
+          if(!d){
+            const th=m4Get(b,tk,'tkhd'),id=th&&m4Head(b,th).id,mvex=m4Get(b,moov,'mvex');
+            if(mvex)for(const x of m4Kids(b,mvex))if(x.type==='trex'&&m4U32(b,m4Body(x)+4)===id)d=m4U32(b,m4Body(x)+12);
+          }
+          const f=ts&&d?ts/d:0;
+          return f>=1&&f<=240?f:0;
+        }
+      }catch(e){}
+      return 0;
+    })().then(f=>{if(it.file===file){it.fps=f;it.fpsP=null}return f});
+  }
+  return it.fpsP;
+}
+/* Midt i billedet under t (kildens billede når dens frekvens kendes, ellers
+   projektets), så der aldrig er tvivl om hvilket billede tiden peger på. */
+function mkFrameMid(t){
+  const s=mkSrcAt(t);
+  if(s&&s.t!=null&&s.fps>0){
+    const c=s.ca.c,mid=clamp((mkFrameOf(s.t,s.fps)+0.5)/s.fps,c.in+1e-4,Math.max(c.in+1e-4,c.out-1e-4));
+    return s.ca.start+(mid-c.in)/c.speed;
+  }
+  const pf=S.proj.fps;
+  return Math.min((mkFrameOf(t,pf)+0.5)/pf,totalDur());
+}
+/* Venter til preview viser S.t: søgningen er færdig, og klippets video har et
+   billede. setTimeout og ikke requestAnimationFrame, så det også går i et
+   skjult vindue (selvtesten). */
+function mkFrameReady(ms){
+  const t0=performance.now();
+  return new Promise(res=>{
+    const chk=()=>{
+      const ca=clipAt(S.t);let ok=!seekBusy&&!seekPend;
+      if(ok&&ca&&isVid(ca.c)){const v=vidElFor(ca.c);ok=v._cid===ca.c.id&&!v.seeking&&v.readyState>=2}
+      if(ok||performance.now()-t0>(ms||4000))res(ok);else setTimeout(chk,25);
+    };
+    chk();
+  });
+}
+
+/* ---------- Mærk: frys billedet, træk en firkant, gem ---------- */
+async function mkStart(editId){
+  if(MK.pending||MK.starting||expRunning)return;
+  if(!S.clips.length){toast('Læg en video på tidslinjen først, så kan du mærke steder i billedet','err');return}
+  const em=editId?mkById(editId):null;
+  MK.starting=true;
+  try{
+    if(S.playing)pause();
+    const t0=em?em.t:S.t,s0=mkSrcAt(t0),it0=s0&&fileOf(s0.ca.c);
+    if(it0&&it0.type==='video')await mkVideoFps(it0);
+    /* Altid en søgning efter pausen: med musik-uret står videoen ellers et
+       par billeder fra S.t. */
+    seekTo(em?t0:mkFrameMid(t0));
+    await mkFrameReady();
+    drawFrame(S.t,ctx);
+    const s=mkSrcAt(S.t),ca=s&&s.ca,it=ca&&fileOf(ca.c);
+    /* Hvor klippets billede ligger på lærredet: firkanten i kildens billede. */
+    const place=it&&!ca.c.missing&&it.w&&it.h?{...clipPlace(ca,S.t,it.w,it.h,cv.width,cv.height),W:cv.width,H:cv.height}:null;
+    const fr=$('mkFrz');fr.width=cv.width;fr.height=cv.height;fr.getContext('2d').drawImage(cv,0,0);
+    const wasFocus=document.body.classList.contains('focusMode');
+    MK.pending={edit:em?em.id:null,t:S.t,src:mkSrcPlain(s),place,rect:em&&em.rect?{...em.rect}:null,
+      type:em?em.type:(MK.lastType||mkTypeList()[0]),note:em?em.note:'',wasFocus};
+    /* Formularen står i inspektøren: Fokus slås fra, mens mærket sættes. */
+    if(wasFocus)toggleFocusMode();
+    $('mkOv').classList.add('on');
+    mkPlace();mkDrawBox();renderInsp();mkTimeUI(true);
+    requestAnimationFrame(mkPlace);
+    const n=$('mkNote');if(n)n.focus();
+    mkFpsHint(s);
+  }finally{MK.starting=false}
+}
+/* Kildens billedfrekvens ≠ projektets: tilbyd at skifte (én gang pr.
+   session), så ← → går præcis ét billede frem i videoen. */
+function mkFpsHint(s){
+  if(MK.fpsAsked||!s||!(s.fps>0))return;
+  const r=Math.round(s.fps);
+  if(Math.abs(s.fps-r)>0.05||r===S.proj.fps||![24,25,30,50,60].includes(r))return;
+  MK.fpsAsked=true;
+  toast(`Videoen har ${r} billeder/sek, projektet ${S.proj.fps}. Med ${r} går ← → præcis ét billede frem i videoen.`,'',
+    {ms:12000,action:{label:`Brug ${r} billeder/sek`,fn:()=>{S.proj.fps=r;applyProjSize();markDirty('billeder/sek');renderInsp()}}});
+}
+/* Mærk-laget og firkant-laget ligger præcis over preview-lærredet. */
+function mkPlace(){
+  const st=$('stage').getBoundingClientRect(),c=cv.getBoundingClientRect();
+  for(const e of[$('mkOv'),$('mkShow')]){
+    e.style.left=(c.left-st.left)+'px';e.style.top=(c.top-st.top)+'px';
+    e.style.width=c.width+'px';e.style.height=c.height+'px';
+  }
+}
+if(window.ResizeObserver){const ro=new ResizeObserver(()=>mkPlace());ro.observe(cv);ro.observe($('stage'))}
+function mkDrawBox(){
+  const p=MK.pending,b=$('mkBox'),r=p&&p.rect;
+  b.hidden=!r;$('mkTip').hidden=!!r;
+  if(r)Object.assign(b.style,{left:r.x*100+'%',top:r.y*100+'%',width:r.w*100+'%',height:r.h*100+'%'});
+}
+/* Firkanten trækkes på det frosne billede (koordinater i andele af billedet). */
+(()=>{
+  const ov=$('mkOv');let d0=null;
+  const at=(e,b)=>({x:clamp((e.clientX-b.left)/b.width,0,1),y:clamp((e.clientY-b.top)/b.height,0,1)});
+  ov.addEventListener('pointerdown',e=>{
+    if(!MK.pending||e.button!==0)return;
+    e.preventDefault();try{ov.setPointerCapture(e.pointerId)}catch(err){}
+    const b=ov.getBoundingClientRect();d0={...at(e,b),b,moved:false};
+  });
+  ov.addEventListener('pointermove',e=>{
+    if(!d0||!MK.pending)return;
+    const q=at(e,d0.b);
+    if(!d0.moved&&Math.abs(q.x-d0.x)*d0.b.width<4&&Math.abs(q.y-d0.y)*d0.b.height<4)return;
+    d0.moved=true;
+    MK.pending.rect={x:Math.min(q.x,d0.x),y:Math.min(q.y,d0.y),w:Math.abs(q.x-d0.x),h:Math.abs(q.y-d0.y)};
+    mkDrawBox();
+  });
+  const up=()=>{
+    if(!d0)return;const moved=d0.moved;d0=null;
+    if(moved&&MK.pending){renderInsp();const n=$('mkNote');if(n)n.focus()}
+  };
+  ov.addEventListener('pointerup',up);ov.addEventListener('pointercancel',up);
+})();
+function mkEnd(){
+  const p=MK.pending;MK.pending=null;
+  $('mkOv').classList.remove('on');$('mkBox').hidden=true;
+  const fr=$('mkFrz');fr.width=1;fr.height=1;   /* frigiv billedet */
+  const a=document.activeElement;if(a&&$('inspBody').contains(a))a.blur();
+  if(p&&p.wasFocus&&!document.body.classList.contains('focusMode'))toggleFocusMode();
+  renderInsp();mkTimeUI(true);
+}
+function mkCancel(){if(MK.pending)mkEnd()}
+function mkSave(){
+  const p=MK.pending;if(!p)return;
+  const type=mkCleanType(p.type)||'Andet',note=String(p.note||'').trim().slice(0,MK_NOTE_MAX),rect=mkCleanRect(p.rect);
+  const thumb=mkThumb($('mkFrz'),rect);
+  let m=p.edit?mkById(p.edit):null;
+  if(m){m.type=type;m.note=note;m.rect=rect}
+  else{m={id:uid(),t:mkR(p.t,4),type,note,rect,src:p.src,created:Date.now()};S.marks.push(m);mkSort()}
+  /* Firkanten i kildens eget billede, når billedet var beskåret eller tilpasset. */
+  if(m.src){const fr=mkFileRect(rect,p.place);if(fr&&!mkSameRect(fr,rect))m.src.rect=fr;else delete m.src.rect}
+  mkSetThumb(m.id,thumb);
+  MK.lastType=type;
+  const edit=!!p.edit;
+  mkEnd();
+  select('mark',m.id);renderTL();markDirty(edit?'ret mærke':'nyt mærke');
+  toast(`Mærke ${mkNo(m)} ${edit?'rettet':'gemt'}${MK.live?' · skrives til '+MK.liveName:''}`,'ok');
+}
+function mkFileRect(r,pl){
+  if(!r||!pl||!(pl.w>0&&pl.h>0))return null;
+  const fx=v=>clamp((v*pl.W-pl.x)/pl.w,0,1),fy=v=>clamp((v*pl.H-pl.y)/pl.h,0,1);
+  return mkCleanRect({x:fx(r.x),y:fy(r.y),w:fx(r.x+r.w)-fx(r.x),h:fy(r.y+r.h)-fy(r.y)});
+}
+/* Miniature (højst MK_THUMB px) med firkanten tegnet ind: mørk kant under en
+   ravgul, så den ses på både lyse og mørke billeder. */
+function mkThumb(src,r){
+  const W=src.width,H=src.height,sc=Math.min(1,MK_THUMB/Math.max(W,H));
+  const c=document.createElement('canvas');c.width=Math.max(2,Math.round(W*sc));c.height=Math.max(2,Math.round(H*sc));
+  const g=c.getContext('2d');g.imageSmoothingQuality='high';g.drawImage(src,0,0,c.width,c.height);
+  if(r){
+    const x=r.x*c.width,y=r.y*c.height,w=r.w*c.width,h=r.h*c.height;
+    g.strokeStyle='rgba(0,0,0,.85)';g.lineWidth=5;g.strokeRect(x,y,w,h);
+    g.strokeStyle=getComputedStyle(document.body).getPropertyValue('--gt-warn').trim()||'#FF8A1F';g.lineWidth=2.5;g.strokeRect(x,y,w,h);
+  }
+  return c.toDataURL('image/jpeg',0.82);
+}
+function mkDelete(id){
+  const i=S.marks.findIndex(m=>m.id===id);if(i<0)return;
+  S.marks.splice(i,1);
+  if(S.sel.kind==='mark'&&S.sel.id===id)deselect();else renderInsp();
+  renderTL();markDirty('slet mærke');
+  toast(`Mærke ${i+1} slettet · Ctrl+Z fortryder`);
+}
+function mkGo(id){const m=mkById(id);if(!m)return;select('mark',id);seekTo(m.t)}
+/* Mens et mærke sættes, er billedet frosset: Esc annullerer, Ctrl+Enter gemmer,
+   og afspil, spol, del, fortryd … venter. Tekstfelter, Tab og Enter virker. */
+addEventListener('keydown',e=>{
+  if(!MK.pending||$('modalBack').classList.contains('open')||$('gsBack').classList.contains('open')||$('acBack').classList.contains('open'))return;
+  const k=e.key;
+  if(k==='Escape'){e.preventDefault();e.stopImmediatePropagation();mkCancel();return}
+  if(k==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();e.stopImmediatePropagation();mkSave();return}
+  const tag=(e.target.tagName||'').toLowerCase();
+  if(tag==='textarea'||tag==='input'||tag==='select'||k==='Tab'||k==='Enter')return;
+  e.stopImmediatePropagation();e.preventDefault();
+  if(k===' '&&e.target.matches&&e.target.matches('button,[role="button"]'))e.target.click();
+},true);
+
+/* ---------- Miniaturer (IndexedDB) ---------- */
+const MK_DB='mediestudio-maerker';
+function mkIdb(){return new Promise((res,rej)=>{const r=indexedDB.open(MK_DB,1);r.onupgradeneeded=()=>r.result.createObjectStore('thumbs');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function mkIdbTx(mode,fn){return mkIdb().then(db=>new Promise((res,rej)=>{const tx=db.transaction('thumbs',mode);fn(tx.objectStore('thumbs'));tx.oncomplete=()=>{db.close();res()};tx.onerror=tx.onabort=()=>{db.close();rej(tx.error)}}))}
+function mkSetThumb(id,d){
+  if(typeof d!=='string')return;
+  MK.thumbs.set(id,d);
+  if(!SELFTEST&&window.indexedDB)mkIdbTx('readwrite',st=>st.put({d,at:Date.now()},id)).catch(e=>console.warn('Miniaturen kunne ikke gemmes',e));
+}
+/* Miniatur fra en fil (projekt eller mærke-JSON): kun et rent billede som data-URL. */
+const mkThumbIn=(id,d)=>{if(typeof d==='string'&&d.length<4e6&&/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/.test(d))mkSetThumb(id,d)};
+async function mkLoadThumbs(){
+  if(SELFTEST||!window.indexedDB)return;
+  const need=S.marks.filter(m=>!MK.thumbs.has(m.id)).map(m=>m.id);if(!need.length)return;
+  let got=0;
+  try{await mkIdbTx('readonly',st=>{for(const id of need){const rq=st.get(id);rq.onsuccess=()=>{const v=rq.result;if(v&&typeof v.d==='string'&&!MK.thumbs.has(id)){MK.thumbs.set(id,v.d);got++}}}})}
+  catch(e){console.warn('Mærkernes miniaturer kunne ikke hentes',e)}
+  if(got&&!MK.pending&&(S.sel.kind==='mark'||!S.sel.kind))renderInsp();
+}
+/* Miniaturer som intet gemt projekt (det åbne, "færre klip"-kopien,
+   backup-ringen) bruger længere, ryddes efter en uge. */
+function mkPruneThumbs(){
+  if(SELFTEST||!window.indexedDB)return;
+  const keep=new Set(S.marks.map(m=>m.id)),add=p=>{if(p&&Array.isArray(p.marks))for(const m of p.marks)if(m&&typeof m.id==='string')keep.add(m.id)};
+  try{add(JSON.parse(localStorage.getItem(LSKEY)||'null'))}catch(e){}
+  add(readPrevAutosave());for(const e of readBackups())add(e.p);
+  const old=Date.now()-7*864e5;
+  mkIdbTx('readwrite',st=>{const rq=st.openCursor();rq.onsuccess=()=>{const c=rq.result;if(!c)return;const v=c.value;if(!keep.has(c.key)&&!(v&&v.at>old))c.delete();c.continue()}}).catch(()=>{});
+}
+/* Importerede mærker uden kildens billedfrekvens får den, når filen er her. */
+async function mkFillFps(){
+  let n=0;
+  for(const m of S.marks){
+    const s=m.src;if(!s||s.t==null||s.fps>0)continue;
+    const it=S.files.find(f=>f.type==='video'&&f.name===s.name&&!f.err&&!f.probing);if(!it)continue;
+    const f=await mkVideoFps(it);if(f>0&&m.src===s){s.fps=mkR(f,4);n++}
+  }
+  if(n){S.dirty=true;if(!HIST.timer)HIST.cur=snap()}
+}
+/* Efter applyProject: miniaturer og billedfrekvens; et halvt mærke afbrydes,
+   og løbende gem holder pause, når et andet projekt åbnes (filen må ikke få
+   et andet projekts mærker). */
+function mkAfterLoad(){
+  if(MK.pending)mkEnd();
+  if(MK.booted&&MK.live){MK.live=null;toast(`Løbende gem af mærker til ${MK.liveName} holder pause, fordi et andet projekt blev åbnet`,'',{ms:7000})}
+  mkLoadThumbs();mkFillFps();
+}
+
+/* ---------- Projektfil og fortryd: tjek alt der kommer udefra ---------- */
+function mkParseSrc(s){
+  if(!s||typeof s!=='object'||typeof s.name!=='string')return null;
+  const o={name:s.name.slice(0,260)},c=Math.round(mkNum(s.clip,0,0,1e5));if(c)o.clip=c;
+  const t=mkNum(s.t,NaN,0,1e5);if(Number.isFinite(t))o.t=t;
+  const f=mkNum(s.fps,0,0,240);if(f>0)o.fps=f;
+  const r=mkCleanRect(s.rect);if(r)o.rect=r;
+  return o;
+}
+function mkParseShot(x){
+  if(!x||typeof x!=='object')return null;
+  const o={};
+  if(x.slot!=null&&x.slot!=='')o.slot=typeof x.slot==='number'&&Number.isFinite(x.slot)?x.slot:String(x.slot).slice(0,20);
+  if(x.shot!=null&&x.shot!=='')o.shot=String(x.shot).slice(0,80);
+  if(x.clip!=null&&x.clip!=='')o.clip=String(x.clip).slice(0,120);
+  const ct=mkNum(x.clip_time,NaN,-1e5,1e5);if(Number.isFinite(ct))o.clip_time=ct;
+  return Object.keys(o).length?o:null;
+}
+function mkParseMarks(a){
+  if(!Array.isArray(a))return[];
+  const out=[],ids=new Set();
+  for(const x of a.slice(0,5000)){
+    if(!x||typeof x!=='object')continue;
+    const t=mkNum(x.t,NaN,0,36000);if(!Number.isFinite(t))continue;
+    const id=typeof x.id==='string'&&/^[a-z0-9]{4,16}$/.test(x.id)&&!ids.has(x.id)?x.id:uid();ids.add(id);
+    const m={id,t,type:mkCleanType(x.type)||'Andet',note:typeof x.note==='string'?x.note.slice(0,MK_NOTE_MAX):'',
+      rect:mkCleanRect(x.rect),src:mkParseSrc(x.src),created:mkNum(x.created,0,0,1e14)||undefined};
+    const sh=mkParseShot(x.shot);if(sh)m.shot=sh;
+    if(x.thumb)mkThumbIn(id,x.thumb);
+    out.push(m);
+  }
+  return out.sort((a,b)=>a.t-b.t||(a.created||0)-(b.created||0));
+}
+function mkParseShots(s){
+  if(!s||typeof s!=='object'||!Array.isArray(s.rows))return null;
+  try{return mkShotsFrom({shots:s.rows,video:s.file,types:s.types},s.name)}catch(e){return null}
+}
+
+/* ---------- Shot-tabel ---------- */
+/* Rækker {slot,t0,t1,shot,clip,in} i videofilens tid. Tager slots.json (en
+   liste) eller {shots|slots:[…], video|file, types:[…]}; uden t1 løber et
+   shot til næste shots start. */
+function mkShotsFrom(j,fname){
+  const raw=Array.isArray(j)?j:j&&typeof j==='object'?(j.shots||j.slots||j.rows):null;
+  if(!Array.isArray(raw))throw new Error('ingen shots i filen');
+  const fin=v=>{const n=typeof v==='string'&&v.trim()!==''?+v:v;return typeof n==='number'&&Number.isFinite(n)?n:NaN};
+  let rows=raw.slice(0,20000).filter(r=>r&&typeof r==='object').map((r,i)=>({
+    slot:r.slot!=null&&r.slot!==''?(Number.isFinite(fin(r.slot))?fin(r.slot):String(r.slot).slice(0,20)):i+1,
+    t0:fin(r.t0!=null?r.t0:r.start),t1:fin(r.t1!=null?r.t1:r.end),
+    shot:String(r.shot!=null?r.shot:r.name!=null?r.name:'').slice(0,80),
+    clip:String(r.clip!=null?r.clip:'').slice(0,120),
+    in:Number.isFinite(fin(r.in))?fin(r.in):0
+  })).filter(r=>Number.isFinite(r.t0)&&r.t0>=0&&r.t0<1e5).sort((a,b)=>a.t0-b.t0);
+  rows.forEach((r,i)=>{if(!(r.t1>r.t0))r.t1=i+1<rows.length?rows[i+1].t0:NaN});
+  rows=rows.filter(r=>r.t1>r.t0);
+  if(!rows.length)throw new Error('ingen shots med start- og sluttid (t0/t1)');
+  const meta=Array.isArray(j)?{}:j;
+  const file=[meta.video,meta.file,meta.source].find(v=>typeof v==='string'&&v)||null;
+  const types=(Array.isArray(meta.types)?meta.types:[]).map(mkCleanType).filter(Boolean).slice(0,20);
+  return{name:String(fname||'shot-tabel').slice(0,120),file:file&&file.slice(0,260),rows,types};
+}
+/* Indlæs fra fil: tabellen bindes til den video den nævner, ellers det valgte
+   klip, klippet ved markøren eller første video. */
+function mkLoadShots(j,fname){
+  const sh=mkShotsFrom(j,fname);
+  const vids=[...new Set(S.clips.filter(c=>c.type==='video').map(clipName))];
+  let note='';
+  if(!(sh.file&&vids.includes(sh.file))){
+    const sc=selClip()||(clipAt(S.t)||{}).c,pick=sc&&sc.type==='video'?clipName(sc):vids[0]||null;
+    if(pick){if(sh.file)note=` (tabellen nævner ${sh.file})`;sh.file=pick}
+  }
+  S.shots=sh;
+  renderTL();renderInsp();markDirty('indlæs shot-tabel');
+  const f=mkShotFile();
+  toast(`Shot-tabel: ${sh.name} · ${sh.rows.length} shots${f?' på '+f:' — læg videoen på tidslinjen'}${note}`,f?'ok':'',{ms:6000});
+}
+/* Videofilen tabellen hører til: den navngivne, ellers den eneste video på tidslinjen. */
+function mkShotFile(){
+  const sh=S.shots;if(!sh)return null;
+  const vids=new Set(S.clips.filter(c=>c.type==='video').map(clipName));
+  if(sh.file&&vids.has(sh.file))return sh.file;
+  return vids.size===1?[...vids][0]:sh.file;
+}
+function mkShotRow(name,ft){
+  const sh=S.shots;if(!sh||ft==null||name!==mkShotFile())return null;
+  const R=sh.rows;let lo=0,hi=R.length-1;
+  while(lo<hi){const m=(lo+hi+1)>>1;if(R[m].t0<=ft+1e-9)lo=m;else hi=m-1}
+  const r=R[lo];return r&&ft>=r.t0-1e-9&&ft<r.t1?r:null;
+}
+/* Shot-oplysninger til et mærke: fra tabellen nu, ellers dem mærket kom med. */
+function mkShotFor(m){
+  const s=m.src,r=s&&mkShotRow(s.name,s.t);
+  return r?{slot:r.slot,shot:r.shot,clip:r.clip,clip_time:mkR(r.in+s.t-r.t0,3)}:m.shot||null;
+}
+/* Tabellens shots som felter på tidslinjen, for hvert klip der viser filen. */
+function mkShotSegs(){
+  const sh=S.shots,f=mkShotFile();if(!sh||!f)return[];
+  const out=[];let acc=0;
+  for(const c of S.clips){
+    const d=clipDur(c);
+    if(c.type==='video'&&clipName(c)===f)sh.rows.forEach((r,k)=>{
+      const a=Math.max(r.t0,c.in),b=Math.min(r.t1,c.out);
+      if(b>a)out.push({t0:acc+(a-c.in)/c.speed,t1:acc+(b-c.in)/c.speed,r,k});
+    });
+    acc+=d;
+  }
+  return out;
+}
+
+/* ---------- Tidslinjen: sporet og preview ---------- */
+let mkShotTxt=null,mkShowKey=null;   /* sidst viste shot-tekst og firkant-nøgle (mkTimeUI) */
+const mkPinLabel=(m,n)=>`Mærke ${n}: ${m.type} ved ${fmtT(m.t)}${m.note?' — '+m.note.replace(/\s+/g,' ').slice(0,140):''}`;
+function mkPinUpd(m){const b=document.querySelector(`.mkPin[data-id="${m.id}"]`);if(b){const l=mkPinLabel(m,mkNo(m));b.setAttribute('aria-label',l);b.title=l}}
+function renderMarkTrack(){
+  const tr=$('trMarks');tr.innerHTML='';
+  const px=S.pxPerSec,segs=mkShotSegs();
+  for(const s of segs){
+    const d=document.createElement('div');d.className='shotSeg'+(s.k%2?' alt':'');
+    const w=(s.t1-s.t0)*px;
+    d.style.left=(s.t0*px)+'px';d.style.width=Math.max(1,w)+'px';
+    if(w>=26)d.textContent=s.r.shot||String(s.r.slot);
+    d.title=`Slot ${s.r.slot}${s.r.shot?' · '+s.r.shot:''}${s.r.clip?' · klip '+s.r.clip:''} · ${fmtT(s.t0)}–${fmtT(s.t1)}`;
+    tr.appendChild(d);
+  }
+  S.marks.forEach((m,i)=>{
+    const b=document.createElement('div');
+    b.className='mkPin'+(S.sel.kind==='mark'&&S.sel.id===m.id?' sel':'');
+    b.dataset.id=m.id;b.tabIndex=0;b.setAttribute('role','button');
+    const l=mkPinLabel(m,i+1);b.setAttribute('aria-label',l);b.title=l;
+    b.style.left=(m.t*px)+'px';
+    b.innerHTML=`<span class="hd">${i+1}</span>`;
+    b.addEventListener('pointerdown',e=>{e.preventDefault();e.stopPropagation();mkGo(m.id)});
+    b.addEventListener('click',e=>{if(e.detail===0)mkGo(m.id)});
+    tr.appendChild(b);
+  });
+  if(!S.marks.length&&!segs.length){const h=document.createElement('div');h.id='mkLaneHint';h.textContent='Tryk M for at mærke et sted i billedet';tr.appendChild(h)}
+  mkShowKey=null;
+}
+/* Kaldes fra updateTimeUI: shottet under markøren i transportlinjen og
+   firkanterne for mærkerne på det billede der står stille i preview. */
+function mkTimeUI(force){
+  let s='';
+  if(S.shots){const src=mkSrcAt(S.t),r=src&&mkShotRow(src.name,src.t);if(r)s=`${r.shot||'–'} · slot ${r.slot}`}
+  if(s!==mkShotTxt){mkShotTxt=s;const e=$('tShot');e.hidden=!s;e.textContent=s?'· '+s:''}
+  const list=!S.playing&&!MK.pending?S.marks.filter(m=>m.rect&&Math.abs(m.t-S.t)<0.5/S.proj.fps):[];
+  const key=list.map(m=>`${m.id}:${mkNo(m)}:${m.rect.x},${m.rect.y},${m.rect.w},${m.rect.h}`).join('|');
+  if(!force&&key===mkShowKey)return;
+  mkShowKey=key;
+  const box=$('mkShow');box.innerHTML='';
+  for(const m of list){
+    const b=document.createElement('div');b.className='mkBox'+(m.rect.y<0.06?' top':'');
+    Object.assign(b.style,{left:m.rect.x*100+'%',top:m.rect.y*100+'%',width:m.rect.w*100+'%',height:m.rect.h*100+'%'});
+    b.innerHTML=`<span class="n">${mkNo(m)}</span>`;box.appendChild(b);
+  }
+  if(list.length)mkPlace();
+}
+
+/* ---------- Inspektøren ---------- */
+function mkInfoHtml(t,src,shot){
+  const L=[`<b>${fmtT(t)}</b> · billede ${mkFrameOf(t,S.proj.fps)} på tidslinjen`];
+  if(src){let s=esc(src.name);if(src.t!=null)s+=` · ${mkSecs(src.t)}${src.fps>0?` · billede ${mkFrameOf(src.t,src.fps)} (${mkFps(src.fps)} fps)`:''}`;L.push(s)}
+  if(shot)L.push(`Shot <b>${esc(shot.shot||'–')}</b>${shot.slot!=null?' · slot '+esc(shot.slot):''}${shot.clip?' · klip '+esc(shot.clip)+(shot.clip_time!=null?' @ '+mkSecs(shot.clip_time):''):''}`);
+  return L.join('<br>');
+}
+/* Type: et tekstfelt (frit) med typerne som genveje. */
+function mkTypeField(parent,val,cb){
+  const r=row('Type'),inp=el('input');inp.type='text';inp.value=val||'';inp.maxLength=60;inp.spellcheck=false;
+  r.appendChild(inp);parent.appendChild(r);
+  const wrap=el('div','mkTypes');
+  const sync=()=>{for(const ch of wrap.children){const on=ch.dataset.t===inp.value.trim();ch.classList.toggle('on',on);ch.setAttribute('aria-pressed',on?'true':'false')}};
+  for(const t of mkTypeList()){
+    const ch=asBtn(el('span','chip'));ch.textContent=t;ch.dataset.t=t;
+    ch.onclick=()=>{inp.value=t;cb(t);sync()};wrap.appendChild(ch);
+  }
+  inp.oninput=()=>{cb(inp.value);sync()};
+  parent.appendChild(wrap);sync();
+  return inp;
+}
+function inspMarkNew(B){
+  const p=MK.pending,em=p.edit?mkById(p.edit):null;
+  $('inspTitle').textContent=em?`Mærke ${mkNo(em)} · ny firkant`:'Nyt mærke';
+  const s=sec(B,em?'Tegn firkanten igen':'Mærk dette billede');
+  s.appendChild(el('div','mkInfo',mkInfoHtml(p.t,p.src,p.src?mkShotFor({src:p.src}):null)));
+  s.appendChild(el('div','mkInfo',`${ICO('target','gi--sm')} ${p.rect?'Firkanten er sat. Træk en ny for at flytte den.':'Træk en firkant på billedet om fejlen (valgfrit).'}`));
+  mkTypeField(s,p.type,v=>{p.type=v});
+  const sn=sec(B,'Note');
+  const ta=el('textarea');ta.id='mkNote';ta.rows=3;ta.maxLength=MK_NOTE_MAX;ta.placeholder='Hvad er galt? (valgfrit)';ta.value=p.note;
+  ta.setAttribute('aria-label','Note');ta.oninput=()=>{p.note=ta.value};
+  sn.appendChild(ta);
+  const br=el('div','btnRow');br.style.marginTop='8px';
+  const bs=el('button','sbtn acc',ICO('check')+(em?' Gem firkanten':' Gem mærke'));bs.title='Gem (Ctrl+Enter)';bs.onclick=mkSave;
+  const bc=el('button','sbtn','Annullér');bc.title='Annullér (Esc)';bc.onclick=mkCancel;
+  br.append(bs,bc);
+  if(p.rect){const bx=el('button','sbtn','Fjern firkant');bx.onclick=()=>{p.rect=null;mkDrawBox();renderInsp();const n=$('mkNote');if(n)n.focus()};br.appendChild(bx)}
+  sn.appendChild(br);
+}
+function inspMark(B,m){
+  const n=mkNo(m);
+  $('inspTitle').textContent=`Mærke ${n}`;
+  const s=sec(B,`Mærke ${n} af ${S.marks.length}`);
+  const d=MK.thumbs.get(m.id);
+  if(d){const im=el('img','mkThumb');im.src=d;im.alt=`Billedet med mærke ${n}`;s.appendChild(im)}
+  s.appendChild(el('div','mkInfo',mkInfoHtml(m.t,m.src,mkShotFor(m))));
+  /* Navigation og handlinger først: når man gennemgår mærkerne, er det dem man bruger. */
+  const br=el('div','btnRow');
+  const bp=el('button','sbtn',ICO('chevron-left')+' Forrige');bp.title='Forrige mærke';bp.disabled=n<=1;bp.onclick=()=>mkGo(S.marks[n-2].id);
+  const bn=el('button','sbtn','Næste '+ICO('chevron-right'));bn.title='Næste mærke';bn.disabled=n>=S.marks.length;bn.onclick=()=>mkGo(S.marks[n].id);
+  const bg=el('button','sbtn','Gå til');bg.title='Sæt markøren på mærkets billede';bg.onclick=()=>mkGo(m.id);
+  br.append(bp,bn,bg);s.appendChild(br);
+  const br2=el('div','btnRow');
+  const bf=el('button','sbtn',ICO('target')+' Ny firkant');bf.title='Tegn firkanten om igen på mærkets billede';bf.onclick=()=>mkStart(m.id);
+  const bx=el('button','sbtn danger',ICO('trash')+' Slet');bx.title='Slet mærket (Delete)';bx.onclick=()=>mkDelete(m.id);
+  br2.append(bf,bx);s.appendChild(br2);
+  const sd=sec(B,'Type og note');
+  mkTypeField(sd,m.type,v=>{m.type=mkCleanType(v)||'Andet';markDirty('mærkets type');mkPinUpd(m);updateSelStatus()});
+  const ta=el('textarea');ta.rows=3;ta.maxLength=MK_NOTE_MAX;ta.placeholder='Hvad er galt?';ta.value=m.note;ta.setAttribute('aria-label','Note');
+  ta.oninput=()=>{m.note=ta.value;markDirty('mærkets note');mkPinUpd(m)};
+  sd.appendChild(ta);
+  inspMarksShared(B);
+}
+function mkListEl(){
+  const L=el('div','mkList');
+  S.marks.forEach((m,i)=>{
+    const on=S.sel.kind==='mark'&&S.sel.id===m.id,sh=mkShotFor(m),d=MK.thumbs.get(m.id);
+    const it=el('div','mkItem'+(on?' on':''));it.dataset.id=m.id;
+    const go=el('button','mkGo');go.setAttribute('aria-pressed',on?'true':'false');go.title='Gå til mærket';
+    if(d){const im=document.createElement('img');im.src=d;im.alt='';go.appendChild(im)}else go.appendChild(el('div','noth',ICO('image')));
+    go.appendChild(el('div','tx',`<div class="tt"><span class="no">${i+1}</span>${fmtT(m.t)}${sh&&sh.shot?' · '+esc(sh.shot):''}</div>
+      <div class="ty">${esc(m.type)}</div>${m.note?`<div class="nt">${esc(m.note)}</div>`:''}`));
+    go.onclick=()=>mkGo(m.id);
+    const rm=el('button','mkRm',ICO('trash','gi--sm'));rm.title=`Slet mærke ${i+1}`;rm.setAttribute('aria-label',`Slet mærke ${i+1}`);rm.onclick=()=>mkDelete(m.id);
+    it.append(go,rm);L.appendChild(it);
+  });
+  return L;
+}
+function inspMarksShared(B){
+  const s=sec(B,S.marks.length?`Mærker · ${S.marks.length}`:'Mærker');
+  if(!S.marks.length)s.appendChild(el('div','mkInfo','Stop billedet ved en fejl og tryk <kbd>M</kbd>. Træk en firkant om fejlen, vælg type og skriv en note. Mærkerne gemmes med projektet og kan gemmes som JSON, som fx Claude kan læse.'));
+  else s.appendChild(mkListEl());
+  const r=el('div','btnRow');
+  const bm=el('button','sbtn'+(S.marks.length?'':' acc'),ICO('target')+' Mærk sted');bm.title='Mærk billedet ved markøren (M)';bm.disabled=!S.clips.length;bm.onclick=()=>mkStart();
+  r.appendChild(bm);
+  if(S.marks.length){const be=el('button','sbtn acc',ICO('download')+' Gem som JSON');be.title='Gem mærkerne som én JSON-fil med miniaturer';be.onclick=mkExport;r.appendChild(be)}
+  s.appendChild(r);
+  if(window.showSaveFilePicker){
+    const lr=el('div','btnRow');lr.style.alignItems='center';
+    if(MK.live){
+      const st=el('div','mkInfo');st.id='mkLiveSt';st.style.cssText='margin:0;flex:1;min-width:0';lr.appendChild(st);
+      const bs=el('button','sbtn','Stop');bs.title='Stop det løbende gem';bs.onclick=mkLivePause;lr.appendChild(bs);
+    }else if(MK.liveStored){
+      const bc=el('button','sbtn',ICO('save')+' Fortsæt løbende gem');bc.title=`Skriv mærkerne til ${MK.liveName} igen, hver gang de ændres`;bc.onclick=mkLiveResume;
+      const bx=el('button','sbtn','Glem filen');bx.title='Glem filen til løbende gem';bx.onclick=mkLiveForget;
+      lr.append(bc,bx);
+      const st=el('div','mkInfo');st.style.cssText='margin:0;flex-basis:100%';st.innerHTML=`Løbende gem i <b>${esc(MK.liveName)}</b> holder pause.`;lr.appendChild(st);
+    }else{
+      const bl=el('button','sbtn',ICO('save')+' Gem løbende til fil…');bl.title='Vælg en JSON-fil. Mærkerne skrives til den, hver gang de ændres.';bl.onclick=mkLivePick;lr.appendChild(bl);
+    }
+    s.appendChild(lr);
+    mkLiveUi();
+  }
+  const r3=el('div','btnRow');
+  const bi=el('button','sbtn',ICO('upload')+' Importér mærker');bi.title='Læg mærker fra en JSON-fil ind i projektet';bi.onclick=()=>$('mkInput').click();r3.appendChild(bi);
+  if(S.marks.length){
+    const bx=el('button','sbtn danger',ICO('trash')+' Slet alle');
+    bx.onclick=()=>{if(confirm(`Slet alle ${S.marks.length} mærker? (Ctrl+Z fortryder)`)){S.marks=[];if(S.sel.kind==='mark')deselect();else renderInsp();renderTL();markDirty('slet alle mærker')}};
+    r3.appendChild(bx);
+  }
+  s.appendChild(r3);
+}
+function inspShots(B){
+  const sh=S.shots,s=sec(B,'Shot-tabel');
+  const r=el('div','btnRow');
+  if(!sh){
+    s.appendChild(el('div','mkInfo','En shot-tabel (fx slots.json fra en render) viser videoens shots på mærkesporet, og hvert mærke får slot, shot og klip med.'));
+    const b=el('button','sbtn',ICO('upload')+' Indlæs shot-tabel');b.onclick=()=>$('shotInput').click();r.appendChild(b);
+  }else{
+    const f=mkShotFile();
+    s.appendChild(el('div','mkInfo',`<b>${esc(sh.name)}</b> · ${sh.rows.length} shots · ${f?esc(f):'ingen video på tidslinjen'}${sh.file&&f&&sh.file!==f?` (tabellen nævner ${esc(sh.file)})`:''}`));
+    const b1=el('button','sbtn',ICO('upload')+' Indlæs en anden');b1.onclick=()=>$('shotInput').click();
+    const b2=el('button','sbtn danger','Fjern');b2.onclick=()=>{S.shots=null;renderTL();renderInsp();markDirty('fjern shot-tabel')};
+    r.append(b1,b2);
+  }
+  s.appendChild(r);
+}
+
+/* ---------- Eksport (JSON) og løbende gem ---------- */
+const MK_FIELDS={
+  t:'tid på tidslinjen i sekunder (midt i billedet)',
+  tc:'tidskode MM:SS.BB som i MedieStudio (BB = billede i sekundet)',
+  frame:'billednummer på tidslinjen i canvas.fps (første billede = 0)',
+  type:'hvad der er galt (valgt eller skrevet af brugeren)',
+  note:'brugerens note',
+  rect:'firkanten om fejlen: x, y, w, h som andele (0-1) af billedet som det blev vist; null = intet område',
+  file:'kildefilen der blev vist',
+  file_t:'tid i kildefilen i sekunder (midt i billedet)',
+  file_frame:'billednummer i kildefilen ved file_fps (første billede = 0)',
+  file_rect:'firkanten som andele af kildefilens eget billede (kun når projektet beskar eller tilpassede billedet)',
+  timeline_clip:'klippets nummer på tidslinjen (1 = første)',
+  'slot, shot, clip, clip_time':'fra shot-tabellen: slot, shot, klippet shottet er taget fra og tiden inde i det klip',
+  thumb:'miniature (JPEG som data-URL) med firkanten tegnet ind'
+};
+function mkExportObj(){
+  const fps=S.proj.fps,sh=S.shots;
+  const marks=S.marks.map((m,i)=>{
+    const o={n:i+1,id:m.id,t:mkR(m.t,3),tc:fmtT(m.t),frame:mkFrameOf(m.t,fps),type:m.type,note:m.note,rect:m.rect||null};
+    const s=m.src;
+    if(s){
+      o.file=s.name;
+      if(s.t!=null){o.file_t=mkR(s.t,3);if(s.fps>0){o.file_frame=mkFrameOf(s.t,s.fps);o.file_fps=mkR(s.fps,3)}}
+      if(s.rect)o.file_rect=s.rect;
+      if(s.clip)o.timeline_clip=s.clip;
+    }
+    const x=mkShotFor(m);if(x)Object.assign(o,x);
+    if(m.created)o.created=new Date(m.created).toISOString();
+    const d=MK.thumbs.get(m.id);if(d)o.thumb=d;
+    return o;
+  });
+  return{format:'mediestudio-maerker',version:1,project:$('projName').value||'',exported:new Date().toISOString(),
+    canvas:{w:S.proj.w,h:S.proj.h,fps},
+    shot_table:sh?{name:sh.name,file:mkShotFile()||null,shots:sh.rows.length}:null,
+    felter:MK_FIELDS,marks};
+}
+const mkJsonBlob=()=>new Blob([JSON.stringify(mkExportObj(),null,1)],{type:'application/json'});
+const mkFileName=()=>($('projName').value||'projekt')+'.maerker.json';
+function mkExport(){
+  if(!S.marks.length){toast('Der er ingen mærker endnu','err');return}
+  saveBlob(mkJsonBlob(),mkFileName(),[{description:'Mærker (JSON)',accept:{'application/json':['.json']}}]);
+}
+/* Løbende gem: en fil vælges én gang; derefter skrives mærkerne til den
+   (højst hvert 1,5 s) når noget i dem ændres. Håndtaget huskes i IndexedDB,
+   men skal have adgang igen efter en genindlæsning (et klik). */
+const mkSig=()=>JSON.stringify([S.marks,S.shots,S.proj.fps,$('projName').value,S.marks.reduce((a,m)=>a+(MK.thumbs.has(m.id)?1:0),0)]);
+async function mkLivePick(){
+  try{
+    const h=await showSaveFilePicker({suggestedName:mkFileName(),id:'mediestudio-maerker',types:[{description:'Mærker (JSON)',accept:{'application/json':['.json']}}]});
+    MK.live=MK.liveStored=h;MK.liveName=h.name;MK.liveSig='';
+    idbSet('maerkerFil',h).catch(()=>{});
+    await mkLiveWrite(true);
+    if(MK.live)toast(`Mærkerne gemmes nu løbende i ${h.name}`,'ok');
+    renderInsp();
+  }catch(e){if(!(e&&e.name==='AbortError'))toast('Kunne ikke vælge filen: '+(e&&e.message||e),'err')}
+}
+async function mkLiveWrite(force){
+  const h=MK.live;if(!h||MK.liveBusy)return;
+  const sig=mkSig();if(!force&&sig===MK.liveSig)return;
+  MK.liveBusy=true;
+  try{
+    const w=await h.createWritable();await w.write(mkJsonBlob());await w.close();
+    MK.liveSig=sig;MK.liveAt=Date.now();
+  }catch(e){
+    console.warn('Løbende gem af mærker fejlede',e);
+    MK.live=null;toast(`Løbende gem til ${MK.liveName} stoppede: ${e&&e.message||e}`,'err',{ms:8000});
+    if(!MK.pending)renderInsp();
+  }finally{MK.liveBusy=false;mkLiveUi()}
+}
+function mkLiveUi(){
+  const e=$('mkLiveSt');if(!e||!MK.live)return;
+  const at=MK.liveAt?new Date(MK.liveAt).toLocaleTimeString('da-DK',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
+  e.innerHTML=`${ICO('check','gi--sm')} Gemmes løbende i <b>${esc(MK.liveName)}</b>${at?' · '+at:''}`;
+}
+function mkLivePause(){MK.live=null;renderInsp()}
+function mkLiveForget(){MK.live=MK.liveStored=null;MK.liveName='';idbSet('maerkerFil',null).catch(()=>{});renderInsp()}
+async function mkLiveResume(){
+  const h=MK.liveStored;if(!h)return;
+  try{
+    let p=await h.queryPermission({mode:'readwrite'});
+    if(p!=='granted')p=await h.requestPermission({mode:'readwrite'});
+    if(p!=='granted'){toast('Adgang til filen blev ikke givet','err');return}
+    MK.live=h;MK.liveSig='';await mkLiveWrite(true);renderInsp();
+  }catch(e){toast(`Kan ikke skrive til ${MK.liveName}: ${e&&e.message||e}`,'err')}
+}
+setInterval(()=>{if(MK.live)mkLiveWrite()},1500);
+
+/* ---------- Import (mærke-JSON, prototypens poi.json, shot-tabel) ---------- */
+function mkJsonKind(j){
+  if(Array.isArray(j)){
+    const o=j.find(x=>x&&typeof x==='object');if(!o)return'';
+    if('t0' in o||'start' in o)return'shots';
+    if('t' in o&&('type' in o||'note' in o||'rect' in o))return'marks';
+    return'';
+  }
+  if(!j||typeof j!=='object')return'';
+  if(j.format==='mediestudio-maerker'&&Array.isArray(j.marks))return'marks';
+  if(Array.isArray(j.shots)||Array.isArray(j.slots))return'shots';
+  if(Array.isArray(j.clips))return'project';
+  return'';
+}
+function mkImport(j){
+  const list=Array.isArray(j)?j:j.marks;
+  let n=0,dup=0;
+  for(const x of list.slice(0,5000)){
+    if(!x||typeof x!=='object')continue;
+    const t=mkNum(x.t,NaN,0,36000);if(!Number.isFinite(t))continue;
+    const type=mkCleanType(x.type)||'Andet',note=typeof x.note==='string'?x.note.slice(0,MK_NOTE_MAX):'',rect=mkCleanRect(x.rect);
+    if(S.marks.some(m=>Math.abs(m.t-t)<0.002&&m.type===type&&m.note===note)){dup++;continue}
+    const id=typeof x.id==='string'&&/^[a-z0-9]{4,16}$/.test(x.id)&&!mkById(x.id)?x.id:uid();
+    const m={id,t,type,note,rect,created:Date.parse(x.created)||(typeof x.id==='number'&&x.id>1e12&&x.id<1e14?x.id:Date.now())};
+    /* Kilden står i eksporten; prototypens mærker har kun videoens tid, så
+       de får den kilde der vises ved t nu. */
+    if(typeof x.file==='string'&&x.file){
+      m.src={name:x.file.slice(0,260)};
+      const c=Math.round(mkNum(x.timeline_clip,0,0,1e5));if(c)m.src.clip=c;
+      const ft=mkNum(x.file_t,NaN,0,1e5);if(Number.isFinite(ft))m.src.t=ft;
+      const fp=mkNum(x.file_fps,0,0,240);if(fp>0)m.src.fps=fp;
+      const fr=mkCleanRect(x.file_rect);if(fr)m.src.rect=fr;
+    }else m.src=mkSrcPlain(mkSrcAt(t));
+    const sh=mkParseShot(x);if(sh)m.shot=sh;
+    if(x.thumb)mkThumbIn(id,x.thumb);
+    S.marks.push(m);n++;
+  }
+  if(!n&&!dup)throw new Error('ingen brugbare mærker i filen');
+  mkSort();renderTL();renderInsp();if(n)markDirty('importér mærker');
+  mkFillFps();
+  toast(`${n} ${n===1?'mærke':'mærker'} importeret${dup?` · ${dup} fandtes allerede`:''}`,n?'ok':'');
+}
+function mkUseJson(j,name,kind){
+  try{if(kind==='marks')mkImport(j);else mkLoadShots(j,name)}
+  catch(e){toast(`${name}: ${e&&e.message||e}`,'err')}
+}
+async function mkDropJson(files){
+  for(const f of files){
+    let j;try{j=JSON.parse(await f.text())}catch(e){toast(`${f.name} er ikke gyldig JSON`,'err');continue}
+    const k=mkJsonKind(j);
+    if(k==='marks'||k==='shots')mkUseJson(j,f.name,k);
+    else if(k==='project')toast(`${f.name} er en projektfil — åbn den med Indlæs`,'err');
+    else toast(`${f.name} er hverken mærker eller en shot-tabel`,'err');
+  }
+}
+$('mkInput').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(err){toast(`${f.name} er ikke gyldig JSON`,'err');return}
+  const k=mkJsonKind(j);
+  if(k==='marks'||k==='shots')mkUseJson(j,f.name,k);else toast(`${f.name} har ingen mærker`,'err');
+};
+$('shotInput').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let j;try{j=JSON.parse(await f.text())}catch(err){toast(`${f.name} er ikke gyldig JSON`,'err');return}
+  mkUseJson(j,f.name,'shots');
+};
+/* Opstart: håndtaget til løbende gem fra sidst (skriver straks videre, hvis
+   browseren stadig giver adgang), oprydning i miniaturerne. */
+if(!SELFTEST&&window.showSaveFilePicker&&window.indexedDB)idbGet('maerkerFil').then(async h=>{
+  if(!h||typeof h.queryPermission!=='function')return;
+  MK.liveStored=h;MK.liveName=h.name;
+  try{if(await h.queryPermission({mode:'readwrite'})==='granted')MK.live=h}catch(e){}
+  if(!MK.pending&&!S.sel.kind)renderInsp();
+}).catch(()=>{});
+setTimeout(()=>{MK.booted=true},0);
+setTimeout(mkPruneThumbs,8000);
+</script>
+<script>
+/* ================================================================
    SELVTEST (?selftest) + OPSTART
    ================================================================ */
 function stBadge(txt,ok){
@@ -4799,8 +5678,31 @@ async function selftest(){
       if(!(rms>0.15))throw new Error('M4A-filen er stille (RMS '+rms.toFixed(3)+')');
       m4txt=` · m4a ${t.kind==='copy'?'kopieret':'omkodet'} ${ab.duration.toFixed(2)} s`;
     }
+    /* Mærker: et mærke i videoklippet (1-3 s) ved 1,5 s med firkant. Det skal
+       stå midt i testklippets billede 15 (30 fps), eksporten skal have tid,
+       billede, firkant, type, note og miniature, og mærket skal overleve at
+       projektet gemmes og indlæses. */
+    let mktxt='';
+    if(fT){
+      seekTo(1.5);
+      await mkStart();
+      if(!MK.pending)throw new Error('mærk-tilstanden startede ikke');
+      MK.pending.rect={x:0.25,y:0.25,w:0.5,h:0.25};MK.pending.type='Volapyk-tekst';MK.pending.note='selvtest';
+      mkSave();
+      const ex=mkExportObj(),m=ex.marks[0];
+      log('mærke',JSON.stringify({...m,thumb:m&&m.thumb?m.thumb.length+' tegn':null}));
+      if(!m||ex.marks.length!==1)throw new Error('mærket kom ikke med i eksporten');
+      if(m.file!=='selftest_tone.mp4'||!(Math.abs(m.file_fps-30)<0.01))throw new Error(`mærkets kilde er ${m.file} (${m.file_fps} fps), ikke testklippet med 30 fps`);
+      if(m.file_frame!==15||!(Math.abs(m.file_t-15.5/30)<1e-3))throw new Error(`mærket står på billede ${m.file_frame} (${m.file_t} s) i klippet, ikke midt i billede 15`);
+      if(!(Math.abs(m.t-(1+15.5/30))<1e-3)||m.frame!==mkFrameOf(m.t,fps))throw new Error(`mærkets tid på tidslinjen er ${m.t} s (billede ${m.frame})`);
+      if(!mkSameRect(m.rect,{x:0.25,y:0.25,w:0.5,h:0.25})||m.type!=='Volapyk-tekst'||m.note!=='selvtest')throw new Error('mærkets firkant, type eller note er forkert');
+      if(!/^data:image\/jpeg;base64,/.test(m.thumb||''))throw new Error('mærket har ingen miniature');
+      applyProject(serializeProject(),{quiet:true});
+      if(S.marks.length!==1||!mkSameRect(S.marks[0].rect,m.rect)||!MK.thumbs.has(S.marks[0].id))throw new Error('mærket overlevede ikke at projektet blev gemt og indlæst');
+      mktxt=` · mærke ${m.tc} billede ${m.file_frame}`;
+    }
     log('DONE ✅');
-    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}`,true);
+    stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}${mktxt}`,true);
   }catch(e){console.error('[SELFTEST] FAIL ❌',e);stBadge('SELVTEST FEJL: '+(e&&e.message||e),false)}
 }
 
@@ -4837,7 +5739,7 @@ function netBadgeUpdate(){
   if(!SELFTEST){
     let saved=null;try{saved=JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){}
     const has=k=>saved&&Array.isArray(saved[k])&&saved[k].length;
-    if(saved&&typeof saved==='object'&&(has('clips')||has('texts')||has('subs')||(saved.music&&typeof saved.music==='object'))){
+    if(saved&&typeof saved==='object'&&(has('clips')||has('texts')||has('subs')||has('marks')||(saved.music&&typeof saved.music==='object'))){
       const nm=applyProject(saved,{quiet:true});
       toast(nm?`Projektet fra sidste session er gendannet — ${nm} ${nm===1?'medie venter på sin fil':'medier venter på deres filer'}. Åbn mappen med dem.`:'Projekt gendannet fra sidste session ✓',nm?'':'ok',{ms:nm?7000:3000});
     }
