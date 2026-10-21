@@ -342,6 +342,14 @@ body.focusMode #main{grid-template-columns:1fr}
 .blk.clip.missing{background:repeating-linear-gradient(135deg,var(--gt-pl-2) 0 7px,var(--gt-sub-1) 7px 14px);border:1px dashed var(--err)}
 .blk.clip.missing .lbl{color:var(--err)}
 .blk.clip .fxdot{position:absolute;left:5px;top:3px;font-size:var(--gt-t-xs);display:flex;align-items:center;gap:3px;background:rgba(0,0,0,.55);color:var(--gt-warn-ink);padding:0 4px;border-radius:var(--gt-r-1);pointer-events:none}
+/* Overgange: vinduet som en lysende stribe hen over snittet (klik går igennem til klippene). */
+.ovgm{position:absolute;top:4px;bottom:4px;z-index:2;pointer-events:none;border-radius:var(--gt-r-2);border:1px solid rgba(25,224,255,.6);
+  background:linear-gradient(90deg,rgba(25,224,255,.06),rgba(25,224,255,.34) 50%,rgba(255,43,214,.10))}
+.ovgm span{position:absolute;left:4px;top:50%;transform:translateY(-50%);max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--gt-t-xs);background:rgba(0,0,0,.62);padding:0 4px;border-radius:var(--gt-r-1)}
+.ovgInfo{font-size:var(--gt-t-xs);color:var(--faint);line-height:1.5;margin:0 0 9px}
+.ovgInfo span{color:var(--dim)}
+.ovgPv{display:block;max-width:100%;margin:0 auto 10px;border-radius:var(--gt-r-2);border:1px solid var(--line);background:#000}
+.ovgAuto{display:flex;align-items:center;gap:4px;font-size:var(--gt-t-xs);color:var(--dim);margin-right:8px;white-space:nowrap}
 .blk.txt{background:var(--text-blk)}
 .blk.sub{background:var(--sub-blk)}
 /* Musik: pladen er halvgennemsigtig, så bølgeformen (tegnet under sporet)
@@ -821,6 +829,8 @@ textarea:focus-visible,
 <input type="file" id="mkInput" accept=".json,application/json" style="display:none">
 <input type="file" id="shotInput" accept=".json,application/json" style="display:none">
 
+<!-- Overgangs-templates fra mix-visuals (genereret af templates/overgange/byg.py --mediestudio). -->
+<script src="./overgange.js"></script>
 <script src="./mp4-muxer.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.1/build/mp4-muxer.min.js';s.onload=function(){if(typeof netBadgeUpdate==='function')netBadgeUpdate()};document.head.appendChild(s)})()"></script>
 <script>
 'use strict';
@@ -1589,8 +1599,10 @@ function clipPlace(ca,t,sw,sh,W,H){
   const c=ca.c,d=clipDur(c),p=d>0?clamp(ca.local/d,0,1):0;
   const fitIn=c.fit==='contain'||c.fit==='blur';
   let scale=fitIn?Math.min(W/sw,H/sh):Math.max(W/sw,H/sh);
-  /* Klipskift-effekten hører til skiftet ind i klippet; første klip har intet. */
-  const bump=(ca.i>0?cutFxScale(c,ca.local):1)*pulseScale(t);
+  /* Klipskift-effekten hører til skiftet ind i klippet; første klip har intet.
+     noCut: klippets lag i en overgang uden for dets egen tid (ingen skift-effekt). */
+  const cut=ca.i>0&&!ca.noCut;
+  const bump=(cut?cutFxScale(c,ca.local):1)*pulseScale(t);
   let ox=0,oy=0;
   if(c.type==='image'&&c.kb){
     const k=c.kb,z=lerp(k.zs,k.ze,p);scale*=z;
@@ -1600,12 +1612,60 @@ function clipPlace(ca,t,sw,sh,W,H){
   }
   /* Rystelse (skift eller slag) og pisk flytter billedet; en rystelse zoomer
      samtidig lidt ind, så kanterne ikke kommer til syne. */
-  const m1=ca.i>0?cutFxOffset(c,ca.local):null,m2=beatShake(t);
+  const m1=cut?cutFxOffset(c,ca.local):null,m2=beatShake(t),m3=orbitOffset(c,t);
   let mx=0,my=0,zoom=1;
-  for(const m of[m1,m2])if(m){mx+=m.x;my+=m.y;if(m.cover)zoom=Math.max(zoom,1+2*Math.max(Math.abs(m.x),Math.abs(m.y)))}
+  for(const m of[m1,m2,m3])if(m){mx+=m.x;my+=m.y;if(m.cover)zoom=Math.max(zoom,1+2*Math.max(Math.abs(m.x),Math.abs(m.y)))}
   /* Zoom-stød og puls skalerer billedet om midten (panoreringen med). */
   const dw=sw*scale*bump*zoom,dh=sh*scale*bump*zoom;ox*=bump*zoom;oy*=bump*zoom;
   return{x:(W-dw)/2+ox+mx*W,y:(H-dh)/2+oy+my*H,w:dw,h:dh};
+}
+/* Kredsende kamera (c.orbit 0-1, som motorens orbit i "Flet sig ind i sig
+   selv"): billedet glider langsomt rundt i en lille cirkel, én omgang pr. 32
+   slag (uden beat-grid 16 s), og zoomer så meget ind, at kanterne ikke ses.
+   Kun bevægelse. */
+function orbitOffset(c,t){
+  if(!(c.orbit>0))return null;
+  const a=clamp(c.orbit,0,1),ph=2*Math.PI*(gridOf()&&!S.music.missing?beatIdx(t)/32:t/16);
+  return{x:0.035*a*Math.cos(ph),y:0.03*a*Math.sin(ph),cover:true};
+}
+/* Billedets fade. Ved et snit med en overgang overtager overgangen: A's fade ud
+   og B's fade ind tegnes ikke (ellers blinker billedet mod baggrunden ved
+   vinduets kant). Lyden følger stadig fadeGain. */
+function fadeGainV(ca){
+  const c=ca.c,n=S.clips[ca.i+1];
+  const fi=ca.i>0&&c.fadeIn>0&&ovgOk(c.trans)?0:c.fadeIn,fo=c.fadeOut>0&&n&&ovgOk(n.trans)?0:c.fadeOut;
+  return fi===c.fadeIn&&fo===c.fadeOut?fadeGain(c,ca.local):fadeGain({...c,fadeIn:fi,fadeOut:fo},ca.local);
+}
+/* Ét klips billede på lærredet: tilpasning, farvekorrektion, fade og looks.
+   opts.src: et fastholdt kildebillede (MP4-eksportens mellembilleder);
+   opts.lay: kilden til en overgangs anden side {src,sw,sh}; opts.noFade: ingen
+   fade (begge lag i en overgang). */
+function drawClipLayer(c2,ca,t,W,H,sFac,bFac,opts){
+  const c=ca.c,it=fileOf(c);
+  if(c.missing){drawMissing(c2,c,W,H,sFac);return}
+  let src=null,sw=0,sh=0;
+  if(opts.lay){src=opts.lay.src;sw=opts.lay.sw;sh=opts.lay.sh}
+  else if(c.type==='video'){
+    if(opts.src){src=opts.src;sw=opts.sw;sh=opts.sh}
+    else{
+      const el=opts.videoEl||vidElFor(c);
+      if(el&&el.readyState>=2){src=el;sw=el.videoWidth;sh=el.videoHeight}
+    }
+  }else if(it&&it.imgEl){src=it.imgEl;sw=it.w;sh=it.h}
+  if(!(src&&sw&&sh))return;
+  const cut=ca.i>0&&!ca.noCut,fg=opts.noFade?1:fadeGainV(ca);
+  /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
+  if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fg,hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
+  const r=clipPlace(ca,t,sw,sh,W,H);
+  c2.save();
+  c2.filter=fxFilter(c.fx,bFac);
+  /* Zoom ind og pisk: bevægelsesuskarphed de første brøkdele af et sekund. */
+  const mb=cut?cutFxBlur(c,ca.local)*Math.min(W,H)/1080:0;
+  if(mb>0.3)c2.filter=(c2.filter==='none'?'':c2.filter+' ')+`blur(${mb.toFixed(2)}px)`;
+  c2.globalAlpha=fg;
+  try{c2.drawImage(src,r.x,r.y,r.w,r.h)}catch(e){}
+  c2.restore();
+  lkApply(c2,W,H,c.fx,t,(cut&&c.cutFx==='glitch'?cutE(c,ca.local):0)+beatGlitch(t));
 }
 function drawFrame(t,c2,opts){
   opts=opts||{};
@@ -1617,33 +1677,10 @@ function drawFrame(t,c2,opts){
   c2.save();
   c2.fillStyle=S.proj.bg;c2.fillRect(0,0,W,H);
   const ca=opts.ca||clipAt(t);
-  if(ca&&ca.c&&ca.c.missing)drawMissing(c2,ca.c,W,H,sFac);
-  else if(ca&&ca.c){
-    const c=ca.c,it=fileOf(c);
-    let src=null,sw=0,sh=0;
-    if(c.type==='video'){
-      /* opts.src: et fastholdt kildebillede (MP4-eksportens mellembilleder). */
-      if(opts.src){src=opts.src;sw=opts.sw;sh=opts.sh}
-      else{
-        const el=opts.videoEl||vidElFor(c);
-        if(el&&el.readyState>=2){src=el;sw=el.videoWidth;sh=el.videoHeight}
-      }
-    }else if(it&&it.imgEl){src=it.imgEl;sw=it.w;sh=it.h}
-    if(src&&sw&&sh){
-      /* Baggrunden får klippets farvekorrektion, men ikke dets sløring. */
-      if(c.fit==='blur')drawBlurBg(c2,src,sw,sh,W,H,fadeGain(c,ca.local),hasFx(c.fx)?fxFilter({...c.fx,blur:0},bFac):'none');
-      const r=clipPlace(ca,t,sw,sh,W,H);
-      c2.save();
-      c2.filter=fxFilter(c.fx,bFac);
-      /* Zoom ind og pisk: bevægelsesuskarphed de første brøkdele af et sekund. */
-      const mb=ca.i>0?cutFxBlur(c,ca.local)*Math.min(W,H)/1080:0;
-      if(mb>0.3)c2.filter=(c2.filter==='none'?'':c2.filter+' ')+`blur(${mb.toFixed(2)}px)`;
-      c2.globalAlpha=fadeGain(c,ca.local);
-      try{c2.drawImage(src,r.x,r.y,r.w,r.h)}catch(e){}
-      c2.restore();
-      lkApply(c2,W,H,c.fx,t,(ca.i>0&&c.cutFx==='glitch'?cutE(c,ca.local):0)+beatGlitch(t));
-    }
-  }
+  /* I en overgang (c.trans, se OVERGANGE) tegnes begge klip og blandes;
+     uden kilde til den anden side tegnes kun det aktuelle klip. */
+  const ov=ca&&ca.c&&!opts.noTrans?ovgAt(t):null;
+  if(!(ov&&ovgDraw(c2,ov,ca,t,W,H,sFac,bFac,opts))&&ca&&ca.c)drawClipLayer(c2,ca,t,W,H,sFac,bFac,opts);
   if(ca&&ca.c&&ca.i>0)drawCutFx(c2,ca.c,ca.local,W,H);
   /* Lydvisualisering (over billedet, under tekster) */
   const m=S.music;
@@ -1734,6 +1771,461 @@ function drawFrame(t,c2,opts){
 }
 
 /* ================================================================
+   OVERGANGE — templates fra mix-visuals (overgange.js) i WebGL2
+   ================================================================
+   Et klip kan have en overgang IND i sig fra klippet før (c.trans):
+   {id, look, at:'efter'|'foer', curve:'blød'|'lineær'|'trin', dur (s),
+   beats? (slag, med beat-grid), seam:'auto'|'#rrggbb', cx?, cy? (punktet for
+   'vokser', -1..1 af den halve bredde/højde)}.
+   'efter': vinduet er [snit, snit+D]. B spiller som altid, og A fortsætter
+   forbi sit Ud; er filen slut, står A's sidste billede stille.
+   'foer': vinduet er [snit-D, snit]. A spiller som altid, og B begynder D før
+   sit Ind; er der intet før Ind, står B's første billede stille.
+   Snittene og tidslinjens længde flytter sig aldrig, og lyden skifter ved
+   snittet. Shaderne er mix-visuals-motorens egne (shaders/3d/mix_*.frag,
+   oversat til WebGL2 af templates/overgange/byg.py): to billeder i lineært lys
+   med dybde i alfa, uMix 0..1, uSeam, uBeat og uRes. Lyset følger kun uMix. */
+const OVG=window.MS_OVERGANGE&&Array.isArray(window.MS_OVERGANGE.templates)?window.MS_OVERGANGE:{templates:[],shaders:{}};
+const OVG_T=Object.fromEntries(OVG.templates.map(t=>[t.id,t]));
+const OVG_LOOKS={kryds:'Krydstoning',...Object.fromEntries(OVG.templates.filter(t=>t.kategori==='skærm'&&OVG.shaders[t.look]).map(t=>[t.look,t.navn]))};
+const OVG_CURVES={'blød':'Blød (som motoren)','lineær':'Lineær','trin':'Raiser + et trin pr. slag'};
+/* Et ukendt look (projekt fra en nyere udgave) tegnes som krydstoning. */
+const ovgOk=tr=>!!(tr&&typeof tr==='object'&&typeof tr.look==='string');
+const ovgName=tr=>OVG_T[tr.id]?OVG_T[tr.id].navn:(OVG_LOOKS[tr.look]||'Overgang');
+/* Fra en projektfil: kendte valg og tal inden for grænser. Et ukendt look
+   bevares (fra en nyere udgave af overgange.js) og tegnes som krydstoning. */
+function ovgParse(t,num){
+  const id=x=>typeof x==='string'&&/^[a-z0-9-]{1,24}$/.test(x)?x:null;
+  const look=id(t.look)||'kryds';
+  const r={id:id(t.id)||look,look,at:t.at==='foer'?'foer':'efter',
+    curve:Object.prototype.hasOwnProperty.call(OVG_CURVES,t.curve)?t.curve:'blød',dur:num(t.dur,1.5,0.05,60),
+    seam:/^#[0-9a-f]{6}$/i.test(t.seam)?t.seam:'auto'};
+  const b=num(t.beats,0,0,256);if(b>0)r.beats=b;
+  if(t.cx!=null)r.cx=num(t.cx,0,-1,1);
+  if(t.cy!=null)r.cy=num(t.cy,0,-1,1);
+  return r;
+}
+/* En template på et klip (overgangen ind i det). Uden beat-grid regnes slagene i 120 BPM. */
+function ovgApplyTpl(c,id){
+  const g=gridOf(),tp=OVG_T[id],look=tp?tp.look:'kryds',beats=tp?tp.slag:4;
+  const tr={id:tp?id:'kryds',look:OVG_LOOKS[look]?look:'kryds',at:tp&&tp.placering==='foer'?'foer':'efter',
+    curve:tp&&OVG_CURVES[tp.kurve]?tp.kurve:'blød',seam:c.trans&&/^#/.test(c.trans.seam||'')?c.trans.seam:'auto'};
+  if(g){tr.beats=beats;tr.dur=beats*60/g.bpm}else tr.dur=clamp(beats*0.5,0.3,12);
+  if(tr.look==='vokser'){tr.cx=0;tr.cy=0}
+  c.trans=tr;
+  /* Flet sig ind i sig selv: B er samme video med varm farve og kredsende kamera
+     (motoren gav samme verden paletten fire og kameraet orbit). */
+  if(tp&&tp.b_look){
+    if(tp.b_look.varm)Object.assign(c.fx,{hue:-28,sat:Math.max(c.fx.sat,1.45),sepia:Math.max(c.fx.sepia,0.12)});
+    if(tp.b_look.kreds)c.orbit=0.8;
+    toast('Klippet fik varm farve og kredsende kamera (kan rettes under Klip og Effekter)','ok');
+  }
+}
+const fmtS=x=>String(Math.round(x*100)/100).replace('.',',')+' s';
+/* Varigheden i sekunder: slag med beat-grid, ellers sekunder. */
+function ovgDur(tr){const g=gridOf();return clamp(tr.beats>0&&g?tr.beats*60/g.bpm:(tr.dur>0?tr.dur:1.5),0.05,60)}
+/* Overgangen ind i klip i (acc = klippets start). D er højst klippet på samme side af snittet. */
+function ovgWin(i,acc){
+  const c=S.clips[i];if(!(i>0&&c&&ovgOk(c.trans)))return null;
+  const A=S.clips[i-1],tr=c.trans,at=tr.at==='foer'?'foer':'efter';
+  const lim=(at==='foer'?clipDur(A):clipDur(c))-1e-3;
+  if(lim<0.05)return null;                    /* klippet er for kort til en overgang */
+  const D=Math.min(ovgDur(tr),lim);
+  return{i,A,B:c,tr,at,cut:acc,D,w0:at==='foer'?acc-D:acc};
+}
+/* Overgangen, tid t ligger i, ellers null. */
+function ovgAt(t){
+  let acc=0;
+  for(let i=0;i<S.clips.length;i++){
+    if(i>0&&S.clips[i].trans){const o=ovgWin(i,acc);if(o&&t>=o.w0&&t<o.w0+o.D)return o}
+    acc+=clipDur(S.clips[i]);
+  }
+  return null;
+}
+/* uMix. blød = smoothstep som motoren (rulleport og presse regner deres hak ud
+   af den); trin = hans "raiser + kick-trin" (DaddyCums): første halvdel kryber
+   til 0,3, anden halvdel rykker et trin pr. slag (80 ms blødt) og er
+   fuldbyrdet ved sidste slag. Uden beat-grid (eller noGrid): fire lige trin. */
+function ovgMix(o,t,noGrid){
+  const u=clamp((t-o.w0)/o.D,0,1),cv=o.tr.curve;
+  if(cv==='lineær')return u;
+  if(cv!=='trin')return u*u*(3-2*u);
+  const half=o.w0+o.D/2,end=o.w0+o.D-0.08,g=noGrid?null:gridOf(),steps=[];
+  if(g&&!S.music.missing&&end>half)for(let k=Math.ceil(beatIdx(half)-1e-6);steps.length<64;k++){const b=beatT(k);if(b>end)break;steps.push(b)}
+  if(!steps.length)for(let k=1;k<=4;k++)steps.push(half+(Math.max(end,half+0.04)-half)*k/4);
+  const n=steps.filter(s=>s<=t).length;
+  if(!n){const p=clamp((t-o.w0)/Math.max(steps[0]-o.w0,1e-3),0,1);return 0.3*p*p}
+  let e=clamp((t-steps[n-1])/0.08,0,1);e=e*e*(3-2*e);
+  return Math.min(1,0.3+0.7*(n-1+e)/steps.length);
+}
+const ovgBeat=t=>gridOf()&&!S.music.missing?beatIdx(t):t*2;
+/* De to lag: A (klippet før snittet) og B, med lokal tid uden for klippets egen længde. */
+function ovgLayers(o,t){
+  const sA=o.cut-clipDur(o.A);
+  return{a:{i:o.i-1,c:o.A,local:t-sA,start:sA},b:{i:o.i,c:o.B,local:t-o.cut,start:o.cut}};
+}
+/* Kildens tid for et videolag, klemt til filen (uden for filen står billedet stille). */
+function ovgMt(L){const c=L.c,it=fileOf(c),mt=c.in+L.local*c.speed;return clamp(mt,0,Math.max(0,((it&&it.dur)||mt+1)-0.03))}
+/* Samme fil og samme sted i filen (et delt klip): det aktuelle klips billede er også den anden sides. */
+function ovgSame(L,cur){
+  const a=L.c,b=cur.c;
+  return a.type==='video'&&b.type==='video'&&!!a.fid&&a.fid===b.fid&&Math.abs(ovgMt(L)-ovgMt(cur))<0.6/S.proj.fps;
+}
+/* Den anden sides kilde {src,sw,sh}; {} = pladsholder, null = intet billede endnu.
+   Eksporten giver sit fangede billede i opts.alt; preview bruger det andet
+   videoelement og holder sidste billede, mens elementet søger. */
+const OVG_HOLD={c:null,g:null,id:null};
+function ovgSrc(L,cur,opts){
+  const c=L.c,it=fileOf(c);
+  if(c.missing)return{};
+  if(c.type==='image')return it&&it.imgEl?{src:it.imgEl,sw:it.w,sh:it.h}:null;
+  if(ovgSame(L,cur)){
+    if(opts.src)return{src:opts.src,sw:opts.sw,sh:opts.sh};
+    const el=opts.videoEl||vidElFor(cur.c);
+    return el&&el.readyState>=2?{src:el,sw:el.videoWidth,sh:el.videoHeight}:null;
+  }
+  if(opts.alt!==undefined)return opts.alt;
+  const el=ovgAltEl(c);
+  if(el&&el.readyState>=2&&!el.seeking&&el.videoWidth){
+    const w=el.videoWidth,h=el.videoHeight;
+    if(!OVG_HOLD.c){OVG_HOLD.c=document.createElement('canvas');OVG_HOLD.g=OVG_HOLD.c.getContext('2d')}
+    if(OVG_HOLD.c.width!==w||OVG_HOLD.c.height!==h){OVG_HOLD.c.width=w;OVG_HOLD.c.height=h}
+    OVG_HOLD.g.drawImage(el,0,0,w,h);OVG_HOLD.id=c.id;
+    return{src:el,sw:w,sh:h};
+  }
+  return OVG_HOLD.id===c.id?{src:OVG_HOLD.c,sw:OVG_HOLD.c.width,sh:OVG_HOLD.c.height}:null;
+}
+/* Lagenes lærreder (pr. størrelse: preview og eksport kan tegne hver sin). */
+const OVG_LAY=new Map();
+function ovgLayCv(k,W,H){
+  const key=k+W+'x'+H;let c=OVG_LAY.get(key);
+  if(!c){if(OVG_LAY.size>=6)OVG_LAY.delete(OVG_LAY.keys().next().value);c=document.createElement('canvas');c.width=W;c.height=H;OVG_LAY.set(key,c)}
+  return c;
+}
+/* Tegner overgangen; false = den anden side har intet billede endnu. */
+function ovgDraw(c2,o,ca,t,W,H,sFac,bFac,opts){
+  const L=ovgLayers(o,t),curK=ca.i===L.a.i?'a':'b',oth=L[curK==='a'?'b':'a'];
+  oth.noCut=true;
+  const src=ovgSrc(oth,L[curK],opts);
+  if(!src)return false;
+  const cvs={a:ovgLayCv('a',W,H),b:ovgLayCv('b',W,H)};
+  for(const k of['a','b']){
+    const g=cvs[k].getContext('2d');
+    g.save();g.fillStyle=S.proj.bg;g.fillRect(0,0,W,H);g.restore();
+    if(k===curK)drawClipLayer(g,ca,t,W,H,sFac,bFac,{...opts,noFade:true});
+    else drawClipLayer(g,oth,t,W,H,sFac,bFac,{lay:src,noFade:true});
+  }
+  const m=ovgMix(o,t);
+  const out=trxRender(trxFor(W,H),o.tr.look,cvs.a,cvs.b,W,H,{uMix:m,uSeam:ovgSeam(o),uBeat:ovgBeat(t),uCen:[(o.tr.cx||0)*0.5*W/H,(o.tr.cy||0)*0.5]});
+  if(out)c2.drawImage(out,0,0,W,H);
+  else{c2.drawImage(cvs.a,0,0);c2.save();c2.globalAlpha=m;c2.drawImage(cvs.b,0,0);c2.restore()}   /* uden WebGL2: krydstoning */
+  return true;
+}
+/* Sømfarven: den valgte, ellers B's mættede middelfarve fra filens miniature
+   (motoren bruger B's palet), så preview og eksport får samme farve. Lineært lys. */
+const OVG_SEAM=new Map();
+const hexLin=h=>[1,3,5].map(i=>Math.pow(parseInt(h.slice(i,i+2),16)/255,2.2));
+function ovgSeam(o){
+  const s=o.tr.seam;
+  if(/^#[0-9a-f]{6}$/i.test(s||''))return hexLin(s);
+  const it=fileOf(o.B);
+  if(it&&OVG_SEAM.get(it.id))return OVG_SEAM.get(it.id);
+  /* Er miniaturen ikke klar endnu, prøves igen efter 1,5 s. */
+  if(it&&!OVG_SEAM.has(it.id)){OVG_SEAM.set(it.id,null);ovgSeamFrom(it).then(v=>{if(v){OVG_SEAM.set(it.id,v);invalidate()}
+    else setTimeout(()=>{if(OVG_SEAM.get(it.id)===null)OVG_SEAM.delete(it.id)},1500)})}
+  return hexLin('#19e0ff');
+}
+async function ovgSeamFrom(it){
+  try{
+    let img=it.imgEl;
+    if(!img&&it.thumb){img=new Image();img.src=it.thumb;await img.decode()}
+    if(!img)return null;
+    const c=document.createElement('canvas');c.width=16;c.height=9;const g=c.getContext('2d',{willReadFrequently:true});
+    g.drawImage(img,0,0,16,9);const d=g.getImageData(0,0,16,9).data;
+    let r=0,gg=0,b=0,w=0;
+    for(let i=0;i<d.length;i+=4){const R=d[i]/255,G=d[i+1]/255,B=d[i+2]/255,mx=Math.max(R,G,B),mn=Math.min(R,G,B),ww=(mx>0?(mx-mn)/mx:0)*mx+0.02;r+=R*ww;gg+=G*ww;b+=B*ww;w+=ww}
+    r/=w;gg/=w;b/=w;
+    /* Klar som en neon-palet: tonen beholdes, mætning mindst 0,6, lysstyrke 0,85. */
+    const mx=Math.max(r,gg,b),mn=Math.min(r,gg,b);let h=0;
+    if(mx>mn){h=mx===r?((gg-b)/(mx-mn))%6:mx===gg?(b-r)/(mx-mn)+2:(r-gg)/(mx-mn)+4;h=(h*60+360)%360}
+    const sat=Math.max(0.6,mx>0?(mx-mn)/mx:0),v=0.85,f=n=>{const k=(n+h/60)%6;return v-v*sat*Math.max(0,Math.min(k,4-k,1))};
+    return[f(5),f(3),f(1)].map(x=>Math.pow(x,2.2));
+  }catch(e){return null}
+}
+/* Før en eksport: alle auto-sømfarver regnes ud, så første billede får den rigtige. */
+async function ovgSeamsReady(){
+  for(const c of S.clips){
+    if(!ovgOk(c.trans)||/^#/.test(c.trans.seam||''))continue;
+    const it=fileOf(c);
+    if(it&&!OVG_SEAM.get(it.id)){const v=await ovgSeamFrom(it);if(v)OVG_SEAM.set(it.id,v)}
+  }
+}
+/* ---------- WebGL2-kompositoren ----------
+   Lagene lægges op som teksturer (vendt, så y peger op som i motoren), regnes
+   om til lineært lys med en dybde i alfa (video har ingen: midten langt væk,
+   kanterne og lyse ting tæt på, som i motorens flyveture), blandes i motorens
+   shader og regnes tilbage til sRGB. Preview/eksport og inspektørens lille
+   forhåndsvisning har hver sin kompositor (hver sin størrelse). */
+const TRX_VS='#version 300 es\nin vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}';
+const TRX_PRE=`#version 300 es
+precision highp float;
+uniform sampler2D uSrc;uniform vec2 uRes;out vec4 o;
+void main(){
+  vec3 c=pow(max(texture(uSrc,gl_FragCoord.xy/uRes).rgb,vec3(0.0)),vec3(2.2));
+  vec2 q=(gl_FragCoord.xy-0.5*uRes)/uRes.y;
+  float f=clamp(1.0-length(q)/0.9,0.0,1.0);f=f*f*(3.0-2.0*f);
+  f*=1.0-0.5*clamp(2.0*dot(c,vec3(0.2126,0.7152,0.0722)),0.0,1.0);
+  o=vec4(c,exp(mix(log(0.8),log(30.0),f)));
+}`;
+const TRX_POST=`#version 300 es
+precision highp float;
+uniform sampler2D uSrc;uniform vec2 uRes;out vec4 o;
+void main(){o=vec4(pow(clamp(texture(uSrc,gl_FragCoord.xy/uRes).rgb,0.0,1.0),vec3(1.0/2.2)),1.0);}`;
+const TRX_KRYDS=`#version 300 es
+precision highp float;
+uniform sampler2D uA,uB;uniform vec2 uRes;uniform float uMix;out vec4 fragColor;
+void main(){vec2 tc=gl_FragCoord.xy/uRes;fragColor=mix(texture(uA,tc),texture(uB,tc),clamp(uMix,0.0,1.0));}`;
+const trxNew=()=>({cv:null,gl:null,ok:null,progs:{},errs:{},W:0,H:0});
+const TRXM=trxNew(),TRXS=trxNew();
+/* Én kompositor pr. lærredsstørrelse (preview og en WebM-eksport i en anden
+   størrelse tegner skiftevis), så teksturerne ikke skifter størrelse pr. billede. */
+const TRX_POOL=new Map();
+function trxFor(W,H){
+  if(!TRXM.W||(TRXM.W===W&&TRXM.H===H))return TRXM;
+  const k=W+'x'+H;let X=TRX_POOL.get(k);
+  if(!X){
+    if(TRX_POOL.size>=2){   /* den ældste størrelse slippes, også dens WebGL-kontekst (browseren har et loft) */
+      const k0=TRX_POOL.keys().next().value,X0=TRX_POOL.get(k0);TRX_POOL.delete(k0);
+      try{const e=X0.gl&&X0.gl.getExtension('WEBGL_lose_context');if(e)e.loseContext()}catch(e){}
+    }
+    X=trxNew();TRX_POOL.set(k,X);
+  }
+  return X;
+}
+function trxShader(gl,type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const m=gl.getShaderInfoLog(s);gl.deleteShader(s);throw new Error(m)}return s}
+function trxLink(X,fs){
+  const gl=X.gl,p=gl.createProgram();
+  gl.attachShader(p,X.vs);gl.attachShader(p,trxShader(gl,gl.FRAGMENT_SHADER,fs));gl.bindAttribLocation(p,0,'p');gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(p));
+  const u={},n=gl.getProgramParameter(p,gl.ACTIVE_UNIFORMS);
+  for(let i=0;i<n;i++){const a=gl.getActiveUniform(p,i);u[a.name.replace(/\[0\]$/,'')]=gl.getUniformLocation(p,a.name)}
+  return{p,u};
+}
+function trxTex(gl){
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  for(const[k,v]of[[gl.TEXTURE_MIN_FILTER,gl.LINEAR],[gl.TEXTURE_MAG_FILTER,gl.LINEAR],[gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE],[gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE]])gl.texParameteri(gl.TEXTURE_2D,k,v);
+  return t;
+}
+function trxInit(X){
+  if(X.ok!==null)return X.ok;
+  try{
+    const cv=document.createElement('canvas');
+    const gl=cv.getContext('webgl2',{alpha:false,depth:false,stencil:false,antialias:false,premultipliedAlpha:false,preserveDrawingBuffer:true});
+    if(!gl)throw new Error('ingen WebGL2');
+    if(!gl.getExtension('EXT_color_buffer_float'))throw new Error('WebGL2 uden flydende tal-buffere');
+    cv.addEventListener('webglcontextlost',e=>{e.preventDefault();Object.assign(X,trxNew())});
+    X.cv=cv;X.gl=gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer());gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+    gl.bindVertexArray(gl.createVertexArray());gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+    X.vs=trxShader(gl,gl.VERTEX_SHADER,TRX_VS);
+    X.pre=trxLink(X,TRX_PRE);X.post=trxLink(X,TRX_POST);X.progs.kryds=trxLink(X,TRX_KRYDS);
+    X.t8=[trxTex(gl),trxTex(gl)];X.tf=[trxTex(gl),trxTex(gl),trxTex(gl)];X.fb=X.tf.map(()=>gl.createFramebuffer());
+    X.ok=true;
+  }catch(e){console.warn('Overgange: WebGL2 kan ikke bruges, krydstoning i stedet',e);X.ok=false}
+  return X.ok;
+}
+/* Motorens shader til et look (oversættes ved første brug; fejler den, bruges krydstoning). */
+function trxProg(X,look){
+  if(!trxInit(X))return null;
+  if(X.progs[look])return X.progs[look];
+  if(X.errs[look]||!OVG.shaders[look])return X.progs.kryds;
+  try{return X.progs[look]=trxLink(X,OVG.shaders[look])}
+  catch(e){X.errs[look]=String(e&&e.message||e);console.warn('Overgangen',look,'kunne ikke oversættes:',e);return X.progs.kryds}
+}
+function trxSize(X,W,H){
+  const gl=X.gl;X.cv.width=W;X.cv.height=H;X.W=W;X.H=H;
+  X.tf.forEach((t,i)=>{
+    gl.bindTexture(gl.TEXTURE_2D,t);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,W,H,0,gl.RGBA,gl.HALF_FLOAT,null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,X.fb[i]);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  });
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+}
+function trxPass(X,P,fb,texs,uni){
+  const gl=X.gl;gl.bindFramebuffer(gl.FRAMEBUFFER,fb);gl.viewport(0,0,X.W,X.H);gl.useProgram(P.p);
+  texs.forEach(([nm,t],i)=>{gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,t);if(P.u[nm])gl.uniform1i(P.u[nm],i)});
+  for(const[k,v]of Object.entries(uni)){const l=P.u[k];if(!l)continue;if(Array.isArray(v))(v.length===2?gl.uniform2fv:gl.uniform3fv).call(gl,l,v);else gl.uniform1f(l,v)}
+  gl.drawArrays(gl.TRIANGLES,0,3);
+}
+/* To lærreder (W×H) blandet i et look; giver WebGL-lærredet eller null. */
+function trxRender(X,look,ca,cb,W,H,uni){
+  const P=trxProg(X,look);if(!P)return null;
+  const gl=X.gl;if(X.W!==W||X.H!==H)trxSize(X,W,H);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  [ca,cb].forEach((c,i)=>{gl.bindTexture(gl.TEXTURE_2D,X.t8[i]);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c)});
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
+  const res=[W,H];
+  trxPass(X,X.pre,X.fb[0],[['uSrc',X.t8[0]]],{uRes:res});
+  trxPass(X,X.pre,X.fb[1],[['uSrc',X.t8[1]]],{uRes:res});
+  /* Billedrammen uden kattefilm: rammen viser B fra starten (uFilm* bruges ikke). */
+  trxPass(X,P,X.fb[2],[['uA',X.tf[0]],['uB',X.tf[1]],['uFilm',X.tf[0]],['uFilm2',X.tf[0]]],
+    {uRes:res,uMix:uni.uMix,uSeam:uni.uSeam,uBeat:uni.uBeat,uCen:uni.uCen||[0,0],uFilmOn:0,uFilmBlend:0,uFilmAspect:1.45,uFilmGain:0.85});
+  trxPass(X,X.post,null,[['uSrc',X.tf[2]]],{uRes:res});
+  return X.cv;
+}
+/* ---------- Preview: den anden sides videoelement ----------
+   B før snittet er det forudindlæste næste klip; A efter snittet spiller
+   videre i sit gamle element. Elementet er stumt og følger uret som i
+   musicTick (fart ±25 %, spring ved store afvigelser). */
+function ovgAltEl(c){return vA._cid===c.id?vA:vB._cid===c.id?vB:null}
+/* Efter snittet slippes A's hale senest 0,6 s før næste snit, når næste klip er
+   video, så det kan forudindlæses; resten af vinduet står A's sidste billede stille. */
+function ovgTailEnd(o){const n=S.clips[o.i+1];return Math.min(o.cut+o.D,o.cut+clipDur(o.B)-(n&&isVid(n)?0.6:0))}
+function ovgAltSync(t){
+  const o=ovgAt(t),ca=clipAt(t),cur=curIdx>=0&&curIdx<S.clips.length?S.clips[curIdx]:null;
+  let L=null;
+  if(o&&ca){const ls=ovgLayers(o,t),cl=ca.i===ls.a.i?ls.a:ls.b;L=cl===ls.a?ls.b:ls.a;if(!isVid(L.c)||ovgSame(L,cl))L=null}
+  /* Uden musik-ur skiftes klippet, før uret når snittet: står det i et "før"-vindue,
+     er B allerede motorens aktuelle klip, og dets element tilhører motoren (lyd og fart). */
+  if(L&&cur===L.c)L=null;
+  if(L&&o.at==='efter'&&L.c===o.A&&t>=ovgTailEnd(o))L=null;
+  /* A's hale er forbi: elementet stoppes og bruges til næste klip igen. I det
+     tik, hvor klippet skiftes uden musik-ur, står uret lige før vinduet: så
+     beholdes halen, til overgangen ind i det aktuelle klip er forbi. */
+  const ow=cur&&curIdx>0?ovgWin(curIdx,clipStart(curIdx)):null;
+  for(const e of[vA,vB])if(e._ovgTail&&!(L&&e._cid===L.c.id)&&!(ow&&ow.at==='efter'&&e._cid===ow.A.id&&t<ovgTailEnd(ow))){
+    e._ovgTail=false;e.pause();e.muted=false;if(e===vNext&&cur)preloadNext(curIdx)}
+  if(!L)return;
+  let el=ovgAltEl(L.c);
+  if(!el){
+    /* vNext lånes, medmindre det er det eneste element med det aktuelle klip. */
+    if(cur&&vNext._cid===cur.id&&vActive._cid!==cur.id)return;
+    el=vNext;prepEl(el,L.c,L.local);el._ovgTail=true;   /* lånt: gives tilbage til næste klip bagefter */
+  }
+  el.muted=true;
+  if(el._ocid!==L.c.id){el._ocid=L.c.id;el._ocorr=0}
+  const mt=ovgMt(L),want=L.c.in+L.local*L.c.speed,out=Math.abs(want-mt)>1e-3;
+  /* Står musik-uret stille (lyden er ikke nået ud endnu), venter den anden side også. */
+  const waiting=MUS.on&&!!audioGraph&&acNow(audioGraph.ac)<MUS.ctx0;
+  if(!S.playing||out||waiting){
+    if(!el.paused)el.pause();
+    if(!S.playing)el._ocorr=0;
+    if(!waiting&&!el.seeking&&Math.abs(el.currentTime-mt)>0.6/S.proj.fps)try{el.currentTime=mt}catch(e){}
+    return;
+  }
+  if(el.paused&&!el.ended&&!el._playReq){el._playReq=true;el.play().catch(()=>{}).finally(()=>{el._playReq=false})}
+  if(el.seeking||el.readyState<2)return;
+  const sp=L.c.speed*(MUS.on?MUS.rate:pvRate()),dr=el.currentTime-mt;
+  /* Højst tre spring pr. vindue (som musicTick); derefter tager farten resten. */
+  if(Math.abs(dr)>0.3&&el._ocorr<3){el._ocorr++;try{el.currentTime=clamp(mt+(SEEK_LAT+0.03)*sp,0,Math.max(0,((fileOf(L.c)||{}).dur||mt)-0.05))}catch(e){}return}
+  const r=Math.abs(dr)<0.012?clamp(sp,0.0625,16):clamp(sp*(1-clamp(dr*2.5,-0.25,0.25)),0.0625,16);
+  if(Math.abs(el.playbackRate-r)>0.004)el.playbackRate=r;
+}
+/* ---------- MP4-eksporten: den anden sides billeder ----------
+   Eksporten afspiller ét klip ad gangen. Den anden sides billeder (A forbi sit
+   Ud, B før sit Ind) fanges derfor i forvejen med et eget videoelement som
+   JPEG i den størrelse, laget tegnes i, og afkodes lidt før de skal bruges. */
+function ovgOtherRange(o){
+  if(o.at==='foer')return{c:o.B,mt0:o.B.in-o.D*o.B.speed,mt1:o.B.in};
+  return{c:o.A,mt0:o.A.out,mt1:o.A.out+o.D*o.A.speed};
+}
+/* Kræver vinduet en fanget rulle? (billedklip og delte klip gør ikke) */
+function ovgNeedsReel(o){
+  const r=ovgOtherRange(o),cur=o.at==='foer'?o.A:o.B;
+  if(!isVid(r.c))return false;
+  return!(cur.type==='video'&&cur.fid===r.c.fid&&Math.abs((o.at==='foer'?cur.out-r.c.in:r.c.out-cur.in))<0.6/S.proj.fps&&cur.speed===r.c.speed);
+}
+async function ovgCapture(o,W,H){
+  const r=ovgOtherRange(o),it=fileOf(r.c),end=Math.max(0,(it.dur||0)-0.03);
+  const a=clamp(r.mt0,0,end),b=clamp(r.mt1,0,end),frames=[],jobs=[];
+  const v=document.createElement('video');v.muted=true;v.playsInline=true;v.preload='auto';
+  try{
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('klippet kan ikke afkodes: '+it.name));v.src=it.url});
+    /* Søgningen giver det første billede (også ved filens start: 1 ms inde, så 'seeked' altid kommer). */
+    await new Promise(res=>{const g=setTimeout(res,5000);v.onseeked=()=>{clearTimeout(g);res()};v.currentTime=Math.max(a,0.001)});
+    const sc=Math.min(1,Math.max(W/v.videoWidth,H/v.videoHeight)),w=Math.max(2,Math.round(v.videoWidth*sc)),h=Math.max(2,Math.round(v.videoHeight*sc));
+    const cvs=document.createElement('canvas');cvs.width=w;cvs.height=h;const g=cvs.getContext('2d');
+    /* toBlob tager billedet med det samme, så lærredet kan genbruges. */
+    const shoot=mt=>{g.drawImage(v,0,0,w,h);jobs.push(new Promise(ok=>cvs.toBlob(bl=>{if(bl)frames.push({mt,blob:bl});ok()},'image/jpeg',0.92)))};
+    shoot(v.currentTime);
+    if(b>a+0.01)await new Promise(res=>{
+      let rv=0,last=performance.now();
+      const done=()=>{clearInterval(iv);if(rv)try{v.cancelVideoFrameCallback(rv)}catch(e){}v.pause();res()};
+      const iv=setInterval(()=>{if(expCancelled||v.ended||(!document.hidden&&performance.now()-last>5000))done()},250);
+      const onF=(now,md)=>{last=performance.now();shoot(md.mediaTime);if(md.mediaTime>=b-1e-4){done();return}rv=v.requestVideoFrameCallback(onF)};
+      v.playbackRate=clamp(0.5*r.c.speed,0.0625,16);
+      rv=v.requestVideoFrameCallback(onF);
+      v.play().catch(()=>done());
+    });
+    await Promise.all(jobs);
+  }finally{v.pause();v.removeAttribute('src');v.load()}
+  frames.sort((x,y)=>x.mt-y.mt);
+  return{frames,bm:new Map()};
+}
+function ovgReelIdx(R,mt){let lo=0,hi=R.frames.length-1,k=0;while(lo<=hi){const m=(lo+hi)>>1;if(R.frames[m].mt<=mt+1e-4){k=m;lo=m+1}else hi=m-1}return k}
+function ovgReelPrefetch(R,k,n){
+  for(let j=k;j<Math.min(R.frames.length,k+n);j++)if(!R.bm.has(j)){R.bm.set(j,null);createImageBitmap(R.frames[j].blob).then(b=>{if(R.bm.has(j))R.bm.set(j,b);else b.close()},()=>{})}
+  for(const[j,b]of R.bm)if(j<k-2){if(b)b.close();R.bm.delete(j)}
+}
+async function ovgReelWarm(R,k,n){
+  await Promise.all(R.frames.slice(k,k+n).map(async(f,o)=>{const j=k+o;if(!R.bm.get(j)){const b=await createImageBitmap(f.blob);if(R.bm.get(j))b.close();else R.bm.set(j,b)}}));
+}
+/* Billedet til kildens tid mt; er det ikke afkodet endnu, bruges et af de forrige. */
+function ovgReelGet(R,mt,stats){
+  if(!R.frames.length)return null;
+  const k=ovgReelIdx(R,mt);ovgReelPrefetch(R,k,8);
+  for(let j=k;j>=Math.max(0,k-4);j--){const b=R.bm.get(j);if(b){if(j!==k&&stats)stats.ovgLate=(stats.ovgLate||0)+1;return{src:b,sw:b.width,sh:b.height}}}
+  return null;
+}
+function ovgReelFree(R){for(const b of R.bm.values())if(b)b.close();R.bm.clear();R.frames.length=0}
+/* ---------- Inspektørens forhåndsvisning ----------
+   Overgangen i løkke mellem A's sidste og B's første billede (miniaturen,
+   indtil det rigtige billede er hentet). */
+/* Billederne hentes ét ad gangen og skaleres til 480 px (det er en lille
+   forhåndsvisning); en fil, der ikke kan læses, prøves ikke igen. */
+const OVG_STILL=new Map();let ovgGrabBusy=false;
+function ovgStill(c,end){
+  const it=fileOf(c);if(!it||c.missing)return null;
+  if(c.type==='image')return it.imgEl||null;
+  const t=end?Math.max(0,c.out-0.05):c.in,key=it.id+'@'+t.toFixed(1),hit=OVG_STILL.get(key);
+  if(hit)return hit;
+  if(hit===undefined&&it.file&&!ovgGrabBusy){
+    while(OVG_STILL.size>=24){const k0=OVG_STILL.keys().next().value,b0=OVG_STILL.get(k0);if(b0&&b0.close)b0.close();OVG_STILL.delete(k0)}
+    OVG_STILL.set(key,null);ovgGrabBusy=true;
+    grabFrame(it.file,t).then(b=>createImageBitmap(b,{resizeWidth:480,resizeQuality:'medium'}))
+      .then(bm=>{if(OVG_STILL.has(key))OVG_STILL.set(key,bm);else bm.close()},()=>OVG_STILL.set(key,false))
+      .finally(()=>{ovgGrabBusy=false});
+  }
+  if(it.thumb){const k2='thumb:'+it.id;let im=OVG_STILL.get(k2);if(!im){im=new Image();im.src=it.thumb;OVG_STILL.set(k2,im)}if(im.complete&&im.naturalWidth)return im}
+  return null;
+}
+function ovgMiniStart(pv,c){
+  const PW=240,ar=S.proj.h/S.proj.w,w=ar>1?Math.round(PW/ar):PW,h=ar>1?PW:Math.round(PW*ar);
+  pv.width=w;pv.height=h;
+  const g=pv.getContext('2d'),la=document.createElement('canvas'),lb=document.createElement('canvas');
+  la.width=lb.width=w;la.height=lb.height=h;
+  const t0=performance.now();let last=0;
+  const draw=now=>{
+    if(!pv.isConnected)return;
+    const tr=c.trans,i=S.clips.indexOf(c),A=S.clips[i-1];
+    if(!ovgOk(tr)||!A)return;
+    /* Hviler under afspilning, eksport og når afsnittet er skjult; højst 30 billeder i sekundet. */
+    if(S.playing||expRunning||!pv.offsetParent||now-last<30){requestAnimationFrame(draw);return}
+    last=now;
+    const D=clamp(ovgDur(tr),0.6,4),x=((now-t0)/1000)%(D+1.2),o={tr,B:c,w0:0.6,D};
+    for(const[cv2,cc,end]of[[la,A,true],[lb,c,false]]){
+      const q=cv2.getContext('2d');q.fillStyle=S.proj.bg;q.fillRect(0,0,w,h);
+      const im=ovgStill(cc,end);
+      if(im){const iw=im.width||im.naturalWidth,ih=im.height||im.naturalHeight,sc=Math.max(w/iw,h/ih);q.drawImage(im,(w-iw*sc)/2,(h-ih*sc)/2,iw*sc,ih*sc)}
+    }
+    const m=ovgMix(o,x,true);
+    const out=trxRender(TRXS,tr.look,la,lb,w,h,{uMix:m,uSeam:ovgSeam(o),uBeat:(now-t0)/500,uCen:[(tr.cx||0)*0.5*w/h,(tr.cy||0)*0.5]});
+    if(out)g.drawImage(out,0,0,w,h);else{g.drawImage(la,0,0);g.globalAlpha=m;g.drawImage(lb,0,0);g.globalAlpha=1}
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
+}
+
+/* ================================================================
    AFSPILNINGSMOTOR — A/B videoelementer, gapless-ish, realtid
    ================================================================ */
 const vA=document.createElement('video'),vB=document.createElement('video');
@@ -1794,30 +2286,42 @@ function startSeek(el,c,local){
 }
 function preloadNext(i){
   const n=S.clips[i+1];
-  if(n&&isVid(n)){prepEl(vNext,n,0);vNext.pause()}
+  /* B før snittet (overgang 'foer'): forudindlæst ved vinduets start og stumt,
+     så det kan spille med i overgangen og glide over i klippet ved snittet. */
+  if(n&&isVid(n)){const o=ovgWin(i+1,clipStart(i+1)),pr=!!(o&&o.at==='foer'&&ovgNeedsReel(o));prepEl(vNext,n,pr?-o.D:0);vNext.pause();vNext.muted=pr}
   else vNext._cid=null;
 }
 async function startClip(i,local){
   curIdx=i;const c=S.clips[i];if(!c)return;
+  /* Overgang efter snittet: A spiller videre (stumt) i sit gamle element, til vinduet er forbi (ovgAltSync). */
+  const ow=ovgWin(i,clipStart(i)),tail=!!(ow&&ow.at==='efter'&&isVid(ow.A)&&(local||0)<ow.D);
   if(isVid(c)){
     let pre=false;
     if(vNext._cid===c.id){const t=vActive;vActive=vNext;vNext=t;pre=true}
-    vNext.pause();
+    if(tail&&vNext._cid===ow.A.id){vNext.muted=true;vNext._ovgTail=true}
+    else vNext.pause();
     /* Det forudindlæste element står allerede på klippets start. Med musik-
        uret er S.t typisk et par billeder forbi klipskiftet; et nyt
        currentTime dér ville starte en rigtig søgning midt i en GOP (sort
        billede, 0,1-3 s forsinkelse). Forskellen tages i stedet af
        hastighedsjusteringen i musicTick. */
     const it=fileOf(c);
-    if(pre&&it&&vActive._fid===it.id&&(local||0)*c.speed<0.25&&Math.abs(vActive.currentTime-c.in)<0.05){
+    /* Et element, der allerede spiller B's start (overgang før snittet), beholdes også. */
+    if(pre&&it&&vActive._fid===it.id&&(local||0)*c.speed<0.25&&(Math.abs(vActive.currentTime-c.in)<0.05||
+       !vActive.paused&&Math.abs(vActive.currentTime-(c.in+(local||0)*c.speed))<0.15)){
       vActive._cid=c.id;vActive.playbackRate=clamp(c.speed*pvRate(),0.0625,16);
     }else prepEl(vActive,c,local);
-    vActive._corr=null;
+    vActive._corr=null;vActive._ovgTail=false;
     vActive.muted=false;
     applyClipVolume(c,local);
     try{await vActive.play()}catch(e){}
+  }else if(tail){
+    /* Billedklip efter et videoklip: A's element (stadig vActive) er halen. */
+    const e=ovgAltEl(ow.A);
+    for(const v of[vA,vB])if(v!==e)v.pause();
+    if(e){e.muted=true;e._ovgTail=true}
   }else{vA.pause();vB.pause()}
-  preloadNext(i);
+  if(!(tail&&vNext._ovgTail))preloadNext(i);
 }
 function applyClipVolume(c,local){
   const g=clamp(c.volume*fadeGain(c,local)*S.masterVol,0,1);
@@ -2183,6 +2687,8 @@ function tick(now){
     }
     needsDraw=true;
   }
+  /* Overgange: den anden sides element følger uret (også mens der scrubbes). */
+  if(S.clips.length>1)ovgAltSync(S.t);
   if(needsDraw){
     needsDraw=S.playing;
     if(!holdPreview()){
@@ -2349,6 +2855,7 @@ function renderTL(){
     if(it&&it.thumb){b.style.backgroundImage=`url(${it.thumb})`;b.style.backgroundSize='auto 100%';b.style.backgroundRepeat='repeat-x'}
     const tags=[];
     if(c.cutFx&&CUT_FX[c.cutFx])tags.push(`<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-bolt"></use></svg>`);
+    if(i>0&&ovgOk(c.trans))tags.push(`<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-crystal"></use></svg>`);
     if(hasFx(c.fx))tags.push('FX');
     if(c.speed!==1)tags.push(c.speed+'×');
     if(c.type==='image')tags.push('<svg class="gi gi--sm" aria-hidden="true"><use href="icons.svg#gi-image"></use></svg>');
@@ -2361,6 +2868,17 @@ function renderTL(){
     attachClipEvents(b,c,i);
     tr.appendChild(b);
     acc+=d;
+  });
+  /* Overgangenes vinduer oven på klippene. */
+  let oa=0;
+  S.clips.forEach((c,i)=>{
+    const o=i>0&&c.trans?ovgWin(i,oa):null;oa+=clipDur(c);
+    if(!o)return;
+    const m=document.createElement('div');m.className='ovgm';
+    m.style.left=(o.w0*S.pxPerSec)+'px';m.style.width=Math.max(4,o.D*S.pxPerSec)+'px';
+    m.title=`${ovgName(o.tr)} · ${o.at==='foer'?'før':'efter'} snittet · ${fmtS(o.D)}`;
+    if(o.D*S.pxPerSec>52)m.innerHTML=`<span>${esc(ovgName(o.tr))}</span>`;
+    tr.appendChild(m);
   });
   renderOverlayTrack($('trTexts'),S.texts,'txt','text');
   renderOverlayTrack($('trSubs'),S.subs,'sub','sub');
@@ -2743,7 +3261,7 @@ function splitAtPlayhead(){
     }
     c2.imgDur=c.imgDur-ca.local;c.imgDur=ca.local;c.out=c.imgDur;c2.out=c2.imgDur;
   }
-  c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;   /* et nyt snit får ikke automatisk en skift-effekt */
+  c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;delete c2.trans;   /* et nyt snit får ikke automatisk en skift-effekt eller overgang */
   S.clips.splice(ca.i+1,0,c2);
   select('clip',c2.id);renderTL();markDirty('del klip');
 }
@@ -2767,7 +3285,7 @@ function deleteSelected(){
 }
 function duplicateSelected(){
   const k=S.sel.kind;
-  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){const c=S.clips[i],n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};S.clips.splice(i+1,0,n);select('clip',n.id);renderTL();markDirty('duplikér klip')}}
+  if(k==='clip'){const i=S.clips.findIndex(c=>c.id===S.sel.id);if(i>=0){const c=S.clips[i],n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined,trans:c.trans?{...c.trans}:undefined};S.clips.splice(i+1,0,n);select('clip',n.id);renderTL();markDirty('duplikér klip')}}
   else if(k==='text'){const x=selText();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.texts.push(n);select('text',n.id);renderTL();markDirty('duplikér tekst')}}
   else if(k==='sub'){const x=selSub();if(x){const n={...x,id:uid(),start:x.start+x.dur};S.subs.push(n);select('sub',n.id);renderTL();markDirty('duplikér undertekst')}}
 }
@@ -2911,6 +3429,8 @@ function inspClip(B,c){
   }
   rng(s1,'Fade ind',c,'fadeIn',0,5,0.1,{fmt:x=>x+'s'});
   rng(s1,'Fade ud',c,'fadeOut',0,5,0.1,{fmt:x=>x+'s'});
+  /* Kredsende kamera: billedet glider langsomt rundt (som motorens orbit). */
+  rng(s1,'Kredsende kamera',{get v(){return c.orbit||0},set v(x){if(x>0)c.orbit=x;else delete c.orbit}},'v',0,1,0.05,{fmt:x=>x>0?Math.round(x*100)+'%':'Fra'});
   selBox(s1,'Tilpasning',c,'fit',['cover|Fyld (beskær)','contain|Tilpas (bånd)','blur|Tilpas + sløret baggrund']);
   if(S.clips.length>1){
     const bf=el('button','sbtn','Brug denne tilpasning på alle klip');
@@ -2926,6 +3446,7 @@ function inspClip(B,c){
     bx.onclick=()=>{S.clips.forEach((x,k)=>{if(c.cutFx&&k>0)x.cutFx=c.cutFx;else delete x.cutFx});markDirty('klipskift på alle klip');invalidate();renderTL();toast(`${c.cutFx?CUT_FX[c.cutFx]:'Intet klipskift'} på alle ${Math.max(0,S.clips.length-1)} klipskift`,'ok')};
     const r=el('div','btnRow');r.appendChild(bx);sx.appendChild(r);
   }
+  inspTrans(B,c);
   if(c.type==='image'&&c.kb){
     const s3=sec(B,'Ken Burns (zoom/pan)');
     rng(s3,'Zoom start',c.kb,'zs',1,2.2,0.01,{fmt:x=>x+'×'});
@@ -2980,6 +3501,63 @@ function inspClip(B,c){
   br2.append(bl,bri);s4.appendChild(br2);
   /* Baglæns, boomerang, frys billede og klipskift (se VÆRKTØJER). */
   if(c.type==='video'&&!c.missing&&typeof inspClipTools==='function')inspClipTools(B,s4,c);
+}
+/* Overgangen fra klippet før ind i dette klip (templates fra mix-visuals). */
+function inspTrans(B,c){
+  const i=S.clips.indexOf(c);if(i<1)return;
+  const sx=sec(B,'Overgang'),tr=ovgOk(c.trans)?c.trans:null;
+  const r=row('Overgang'),s=el('select');
+  const opt=(v,txt,par)=>{const o=el('option',null,esc(txt));o.value=v;(par||s).appendChild(o)};
+  const grp=(label,list)=>{if(!list.length)return;const g=el('optgroup');g.label=label;for(const[v,t]of list)opt(v,t,g);s.appendChild(g)};
+  opt('','Ingen (hårdt snit)');
+  grp('Enkel',[['kryds','Krydstoning']]);
+  for(const[k,label]of[['skærm','Fra mix-visuals'],['timing','Hans mixovers'],['samme-verden','Samme verden']])
+    grp(label,OVG.templates.filter(t=>t.kategori===k).map(t=>[t.id,t.navn]));
+  s.value=tr?(OVG_T[tr.id]||tr.id==='kryds'?tr.id:''):'';
+  s.onchange=()=>{if(!s.value)delete c.trans;else ovgApplyTpl(c,s.value);markDirty('overgang');invalidate();renderTL();renderInsp()};
+  r.appendChild(s);sx.appendChild(r);
+  const tp=tr&&OVG_T[tr.id];
+  sx.appendChild(el('div','ovgInfo',!tr?'Overgangen fra klippet før. Templates fra mix-visuals er de samme overgange som i mix-videoerne.':
+    esc(tp?tp.kort:'De to klip toner over i hinanden.')+(tp&&tp.brugt_i?`<br><span>Brugt i ${esc(tp.brugt_i)}</span>`:'')));
+  if(!tr)return;
+  const pv=el('canvas','ovgPv');sx.appendChild(pv);ovgMiniStart(pv,c);
+  selBox(sx,'Look',tr,'look',Object.entries(OVG_LOOKS).map(([k,v])=>`${k}|${v}`),v=>{if(v==='vokser'){if(tr.cx==null)tr.cx=0;if(tr.cy==null)tr.cy=0}renderTL();renderInsp()});
+  /* Varighed i slag (med beat-grid) eller sekunder. */
+  const g=gridOf(),ur=row('Varighed'),ni=el('input'),us=el('select');
+  ni.type='number';ni.min=0.1;ni.max=256;ni.step=0.5;
+  for(const[v,t]of[['slag','slag'],['s','sek.']]){const o=el('option',null,t);o.value=v;us.appendChild(o)}
+  const beatsOn=()=>!!(g&&tr.beats>0);
+  const show=()=>{us.value=beatsOn()?'slag':'s';ni.value=beatsOn()?tr.beats:Math.round(ovgDur(tr)*100)/100};
+  const done=label=>{markDirty(label);invalidate();renderTL();show()};
+  if(!g){us.disabled=true;us.title='Slag kræver et beat-grid på musiksporet'}
+  ni.onchange=()=>{const v=clamp(+ni.value||0,0.1,beatsOn()?256:60);if(beatsOn()){tr.beats=v;tr.dur=v*60/g.bpm}else{tr.dur=v;delete tr.beats}done('overgangens varighed')};
+  us.onchange=()=>{const D=ovgDur(tr);if(us.value==='slag'&&g){tr.beats=Math.max(0.5,Math.round(D*g.bpm/60*2)/2);tr.dur=tr.beats*60/g.bpm}else{delete tr.beats;tr.dur=Math.round(D*100)/100}done('overgangens varighed')};
+  show();ur.append(ni,us);sx.appendChild(ur);
+  selBox(sx,'Placering',tr,'at',['efter|Efter snittet','foer|Før snittet (som hans mixover)'],()=>{renderTL();renderInsp()});
+  selBox(sx,'Kurve',tr,'curve',Object.entries(OVG_CURVES).map(([k,v])=>`${k}|${v}`));
+  /* Sømfarve: auto = klip B's egen farve (som motorens palet), ellers valgt. */
+  const sr=row('Sømfarve'),sa=el('input'),sc=el('input'),lab=el('label','ovgAuto');
+  sa.type='checkbox';sa.checked=!/^#/.test(tr.seam||'');
+  sc.type='color';sc.value=/^#/.test(tr.seam||'')?tr.seam:'#19e0ff';sc.disabled=sa.checked;
+  sa.onchange=()=>{tr.seam=sa.checked?'auto':sc.value;sc.disabled=sa.checked;markDirty('sømfarve');invalidate()};
+  sc.oninput=()=>{tr.seam=sc.value;markDirty('sømfarve');invalidate()};
+  lab.append(sa,document.createTextNode('Auto'));sr.append(lab,sc);sx.appendChild(sr);
+  if(tr.look==='vokser'){rng(sx,'Punkt vandret',tr,'cx',-1,1,0.05);rng(sx,'Punkt lodret',tr,'cy',-1,1,0.05)}
+  /* Mangler der billeder på den anden side, står dens yderste billede stille. */
+  const o=ovgWin(i,clipStart(i));
+  if(o){
+    const rr=ovgOtherRange(o);
+    if(isVid(rr.c)){
+      const it=fileOf(rr.c),have=o.at==='foer'?rr.c.in/rr.c.speed:((it&&it.dur||0)-rr.c.out)/rr.c.speed;
+      if(have<o.D-0.02)sx.appendChild(el('div','ovgInfo',o.at==='foer'?`B har kun ${fmtS(Math.max(0,have))} før sit Ind, så B's første billede står stille i ${fmtS(o.D-Math.max(0,have))}.`:
+        `A har kun ${fmtS(Math.max(0,have))} efter sit Ud, så A's sidste billede står stille i ${fmtS(o.D-Math.max(0,have))}.`));
+    }
+  }
+  if(S.clips.length>2){
+    const ba=el('button','sbtn','Brug denne overgang på alle klipskift');
+    ba.onclick=()=>{S.clips.forEach((x,k)=>{if(k>0&&x!==c)x.trans={...tr}});markDirty('overgang på alle klipskift');invalidate();renderTL();toast(`${ovgName(tr)} på alle ${S.clips.length-1} klipskift`,'ok')};
+    const rw=el('div','btnRow');rw.appendChild(ba);sx.appendChild(rw);
+  }
 }
 function inspText(B,tx){
   $('inspTitle').textContent='Tekst';
@@ -3401,6 +3979,9 @@ function applyProject(p,opts){
       speed:num(c.speed,1,0.25,4),volume:num(c.volume,type==='image'?0:1,0,1),fadeIn:num(c.fadeIn,0,0,5),fadeOut:num(c.fadeOut,0,0,5),
       fit:c.fit==='contain'||c.fit==='blur'?c.fit:'cover',
       ...(Object.prototype.hasOwnProperty.call(CUT_FX,c.cutFx)?{cutFx:c.cutFx}:{}),
+      /* Overgang ind i klippet og kredsende kamera (se OVERGANGE). */
+      ...(c.trans&&typeof c.trans==='object'?{trans:ovgParse(c.trans,num)}:{}),
+      ...(num(c.orbit,0,0,1)>0?{orbit:num(c.orbit,0,0,1)}:{}),
       /* Baglæns-kopi: hvilken kilde og hvilket stykke den blev lavet af. */
       ...(c.rev&&typeof c.rev==='object'&&typeof c.rev.name==='string'?{rev:{name:c.rev.name.slice(0,260),size:num(c.rev.size,0,0,1e14),in:num(c.rev.in,0,0,1e5),out:num(c.rev.out,0,0,1e5)}}:{}),
       fx:Object.fromEntries(Object.keys(FXDEF).map(k=>[k,k==='mirror'?Math.round(num(fx[k],0,0,3)):['glow','grain','vignette','rgb','vhs'].includes(k)?num(fx[k],0,0,1):num(fx[k],FXDEF[k],-180,180)])),
@@ -3831,6 +4412,8 @@ $('expGo').onclick=async()=>{
   try{
     /* Lydvisualiseringen skal have sine bånd, før billederne tegnes. */
     if(S.music&&S.music.vis&&typeof visEnsure==='function'){setProg(0,'Analyserer musikken til lydvisualiseringen…');await visEnsure()}
+    /* Overgangenes auto-sømfarver regnes ud, før første billede tegnes. */
+    await ovgSeamsReady();
     const blob=fmt==='mp4'?await exportMP4(q,size,setProg):await exportWebM(q,setProg,size);
     if(blob&&!expCancelled){
       const ext=fmt==='mp4'?'.mp4':'.webm';
@@ -3838,6 +4421,9 @@ $('expGo').onclick=async()=>{
       /* Huller der ikke kunne tages om (maskinen var for travl): sig det. */
       const un=fmt==='mp4'&&lastExportStats?lastExportStats.unfixed:0;
       if(saved&&un)toast(`Gemt, men ${un} ${un===1?'kildebillede':'kildebilleder'} blev sprunget over, så et billede kan stå lidt for længe. Luk tunge programmer og eksportér igen for et perfekt resultat.`,'err',{ms:10000});
+      /* Overgange, hvor den anden sides billede ikke var afkodet i tide (forrige billede brugt). */
+      const ol=fmt==='mp4'&&lastExportStats?lastExportStats.ovgLate:0;
+      if(saved&&!un&&ol)toast(`Gemt. I overgangene kom ${ol} ${ol===1?'billede':'billeder'} af den anden side lidt for sent, så det forrige blev brugt.`,'err',{ms:8000});
     }else if(expCancelled)toast('Eksport annulleret');
   }catch(err){
     console.error('Eksport fejlede:',err);
@@ -3986,7 +4572,8 @@ async function exportMP4(q,size,prog,noSave){
   /* — video — */
   const expVid=document.createElement('video');expVid.muted=true;expVid.playsInline=true;expVid.preload='auto';
   let frameIdx=0,lastTs=-1,pend=null,snapN=0;
-  const stats=lastExportStats={frames:0,drops:0,rewinds:0,unfixed:0};
+  const stats=lastExportStats={frames:0,drops:0,rewinds:0,unfixed:0,ovg:0,ovgLate:0};
+  await ovgSeamsReady();
   const keyEvery=fps*2,frameUs=Math.round(1e6/fps);
   /* Hvert billede holdes tilbage til det næste kendes, så dets varighed er
      den reelle afstand, og det sidste billede slutter præcis ved total. */
@@ -4003,8 +4590,17 @@ async function exportMP4(q,size,prog,noSave){
   /* Et billede tegnes og fastfryses som VideoFrame med det samme (synkront,
      mens kilden viser det rigtige billede) og sendes derefter til encoderen
      i rækkefølge (asynkront). */
+  /* Overgange: den anden sides billede til tidslinjetiden, fanget i forvejen
+     (null = vinduet mangler sin rulle: kun det aktuelle klip tegnes). */
+  const ovgReels=new Map();
+  const ovgAlt=tlT=>{
+    const o=ovgAt(tlT);if(!o)return undefined;
+    const R=ovgReels.get(o.i);if(!R)return ovgNeedsReel(o)?null:undefined;
+    const L=ovgLayers(o,tlT);return ovgReelGet(R,ovgMt(o.at==='foer'?L.b:L.a),stats);
+  };
   const snapFrame=(tlT,caOv,srcOv)=>{
-    drawFrame(tlT,ectx,caOv?Object.assign({ca:caOv,videoEl:expVid},srcOv||{}):{});
+    const al=ovgAlt(tlT);
+    drawFrame(tlT,ectx,caOv?Object.assign({ca:caOv,videoEl:expVid},srcOv||{},al!==undefined?{alt:al}:{}):{});
     let ts=snapN===0?0:Math.round(tlT*1e6);   /* første billede = 0 */
     if(ts<=lastTs)ts=lastTs+Math.round(frameUs/2);
     lastTs=ts;snapN++;
@@ -4018,6 +4614,16 @@ async function exportMP4(q,size,prog,noSave){
     for(let i=0;i<S.clips.length&&!expCancelled;i++){
       const c=S.clips[i],start=acc,d=clipDur(c);acc+=d;
       const it=fileOf(c);
+      /* Overgange i dette klip: efter snittet ind i det (A's hale) og før
+         snittet til det næste (B's start). Den anden sides billeder fanges først. */
+      for(const j of[i,i+1]){
+        const o=j<S.clips.length?ovgWin(j,j===i?start:start+d):null;
+        if(!o||ovgReels.has(j)||(o.at==='efter')!==(j===i)||!ovgNeedsReel(o))continue;
+        prog(start/total,`Overgang ind i klip ${j+1}: fanger billeder…`);
+        const R=await ovgCapture(o,W,H);
+        await ovgReelWarm(R,0,8);
+        ovgReels.set(j,R);stats.ovg++;
+      }
       /* Billeder skrives i projektets fps: tik k/fps fra klippets start. */
       const n=Math.max(1,Math.round(d*fps));
       /* Billedklip og pladsholdere (manglende fil) tegnes billede for billede. */
@@ -4174,6 +4780,7 @@ async function exportMP4(q,size,prog,noSave){
           arm();
         });
       }
+      for(const j of[i,i+1]){const R=ovgReels.get(j);if(R){ovgReelFree(R);ovgReels.delete(j)}}
     }
     if(encErr)throw encErr;
     if(expCancelled)return null;
@@ -4184,6 +4791,7 @@ async function exportMP4(q,size,prog,noSave){
     /* Også ved fejl og annullering: slip encoderen (close() på en lukket encoder
        kaster) og video-elementets blob-URL. */
     if(pend){try{pend.fr.close()}catch(e){}pend=null}
+    for(const R of ovgReels.values())ovgReelFree(R);
     try{venc.close()}catch(e){}
     expVid.pause();expVid.removeAttribute('src');expVid.load();
   }
@@ -6132,7 +6740,7 @@ async function revClip(c,boom){
   const len=Math.min(gi.dur,src.out-src.in);
   if(boom){
     const n={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined,fid:gi.id,in:0,out:len,rev:src,fadeIn:0};
-    delete n.cutFx;c.fadeOut=0;
+    delete n.cutFx;delete n.trans;c.fadeOut=0;
     S.clips.splice(i+1,0,n);select('clip',n.id);
   }else{
     c.rev=src;c.fid=gi.id;c.in=0;c.out=len;
@@ -6194,7 +6802,7 @@ async function freezeFrame(c){
   const img={id:uid(),fid:gi.id,type:'image',imgDur:FRZ_DUR,in:0,out:FRZ_DUR,speed:1,volume:0,fadeIn:0,fadeOut:0,fit:c.fit,fx:{...c.fx},kb:{zs:1,ze:1,pxs:0,pxe:0,pys:0,pye:0}};
   if(local>0.05&&local<clipDur(c)-0.05){
     const c2={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined},cut=c.in+local*c.speed;
-    c2.in=cut;c2.out=c.out;c.out=cut;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;
+    c2.in=cut;c2.out=c.out;c.out=cut;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;delete c2.trans;
     S.clips.splice(i+1,0,img,c2);
   }else S.clips.splice(local<=0.05?i:i+1,0,img);
   select('clip',img.id);renderTL();markDirty('frys billede');seekTo(clipStart(S.clips.indexOf(img))+0.01);
@@ -6331,7 +6939,7 @@ function scnSplit(c){
   const i=S.clips.indexOf(c);if(i<0||!cuts.length)return;
   for(const ft of cuts){   /* bagfra: c beholder hele tiden den venstre del */
     const c2={...c,id:uid(),fx:{...c.fx},kb:c.kb?{...c.kb}:undefined};
-    c2.in=ft;c2.out=c.out;c.out=ft;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;
+    c2.in=ft;c2.out=c.out;c.out=ft;c.fadeOut=0;c2.fadeIn=0;delete c2.cutFx;delete c2.trans;
     S.clips.splice(i+1,0,c2);
   }
   SCN.cid=null;SCN.cuts=null;
@@ -6841,6 +7449,67 @@ async function selftest(){
       applyProject(serializeProject(),{quiet:true});
       if(S.marks.length!==1||!mkSameRect(S.marks[0].rect,m.rect)||!MK.thumbs.has(S.marks[0].id))throw new Error('mærket overlevede ikke at projektet blev gemt og indlæst');
       mktxt+=` · mærke ${m.tc} billede ${m.file_frame}`;
+    }
+    /* Overgange (templates fra mix-visuals): alle looks oversættes i WebGL2.
+       Billede -> billede med portal før snittet: midten er B, toppen er A (og
+       vender rigtigt). MP4 med testklippet: portal før snittet ind i det (B
+       begynder før sit Ind, fanget i forvejen) og væv efter snittet ud af det
+       (A fortsætter forbi sit Ud); længden er uændret. Tidslinjen stilles tilbage. */
+    if(fT&&trxInit(TRXM)){
+      const bad=Object.keys(OVG_LOOKS).filter(k=>k!=='kryds'&&trxProg(TRXM,k)===TRXM.progs.kryds);
+      if(bad.length)throw new Error('overgangene kunne ikke oversættes: '+bad.join(', ')+' ('+(TRXM.errs[bad[0]]||'ukendt')+')');
+      const keep=JSON.stringify(S.clips);
+      const iA=S.clips.find(c=>c.fid===fA.id),iB=S.clips.find(c=>c.fid===fB.id),vT=S.clips.find(c=>c.fid===fT.id);
+      const W=cv.width,H=cv.height,cc=document.createElement('canvas');cc.width=W;cc.height=H;const gg=cc.getContext('2d',{willReadFrequently:true});
+      const rgbAt=(g2,w,h,x,y)=>Array.from(g2.getImageData(Math.round(x*(w-1)),Math.round(y*(h-1)),1,1).data).slice(0,3);
+      const isBlue=p=>p[2]>p[0]+40&&p[2]>90,isOrange=p=>p[0]>80&&p[0]>p[1]+25&&p[1]>p[2],isTone=p=>p[1]>p[0]+12&&p[1]>p[2]&&p[1]<110;
+      S.clips=[{...iA,fx:{...FXDEF},fadeIn:0},{...iB,fx:{...FXDEF},cutFx:undefined,trans:{id:'portal',look:'portal',at:'foer',curve:'lineær',dur:0.4,seam:'#19e0ff'}}];
+      drawFrame(0.7,gg);const pc=rgbAt(gg,W,H,0.5,0.6),pt=rgbAt(gg,W,H,0.5,0.02);
+      drawFrame(0.7,gg,{noTrans:true});const nc=rgbAt(gg,W,H,0.5,0.6);
+      log('overgang billede: midt',pc,'top',pt,'uden overgang',nc);
+      if(!isOrange(pc)||!isBlue(nc))throw new Error(`portalen viser ikke B i midten (${pc} / uden: ${nc})`);
+      if(!isBlue(pt))throw new Error(`portalens kant viser ikke A's top (${pt}): billedet vender forkert eller A mangler`);
+      S.clips=[{...iA,fx:{...FXDEF},fadeIn:0},{...vT,in:0.3,out:1.7,trans:{id:'portal',look:'portal',at:'foer',curve:'lineær',dur:0.25,seam:'#19e0ff'}},
+        {...iB,fx:{...FXDEF},cutFx:undefined,trans:{id:'weave',look:'weave',at:'efter',curve:'blød',dur:0.5,seam:'auto'}}];
+      renderTL();
+      const tot2=totalDur();
+      let ovmp4='';
+      if(canMp4()){
+        expCancelled=false;
+        const blob=await exportMP4(0.08,false,()=>{},true);
+        if(!blob)throw new Error('eksporten med overgange gav ingen fil');
+        const d2=await blobDuration(blob),st=lastExportStats;
+        log('overgange mp4',blob.size,'B',d2.toFixed(3),'s, ruller',st.ovg,'sene',st.ovgLate);
+        if(!(Math.abs(d2-tot2)<1/fps))throw new Error(`eksporten med overgange varer ${d2.toFixed(3)} s, ikke ${tot2.toFixed(3)} s`);
+        if(st.ovg!==2)throw new Error(`eksporten fangede ${st.ovg} ruller, ikke 2 (B før snittet og A efter)`);
+        const fr=async t=>{const im=await createImageBitmap(await grabFrame(blob,t)),w=im.width,h=im.height,c=document.createElement('canvas');c.width=w;c.height=h;
+          const g2=c.getContext('2d',{willReadFrequently:true});g2.drawImage(im,0,0);im.close();return{g2,w,h}};
+        const f1=await fr(0.84),c1=rgbAt(f1.g2,f1.w,f1.h,0.5,0.6),t1=rgbAt(f1.g2,f1.w,f1.h,0.5,0.02);
+        log('mp4 portal: midt',c1,'top',t1);
+        if(!isTone(c1)||!isBlue(t1))throw new Error(`MP4: portalen før snittet viser ikke testklippets start i midten (${c1}) og A i toppen (${t1})`);
+        const f2=await fr(2.65),f3=await fr(3.25);
+        let tone=0,n=0,diff=0;
+        const d2a=f2.g2.getImageData(0,0,f2.w,f2.h).data,d3a=f3.g2.getImageData(0,0,f3.w,f3.h).data;
+        for(let k=0;k<d2a.length;k+=4*97){n++;if(isTone([d2a[k],d2a[k+1],d2a[k+2]]))tone++;diff+=Math.abs(d2a[k]-d3a[k])+Math.abs(d2a[k+1]-d3a[k+1])}
+        log('mp4 væv: testklip-pixels',(tone/n*100).toFixed(1)+' %','forskel fra B',(diff/n).toFixed(1));
+        if(!(tone/n>0.03&&diff/n>8))throw new Error(`MP4: vævet efter snittet viser ikke testklippet forbi sit Ud (${(tone/n*100).toFixed(1)} % testklip)`);
+        ovmp4=`, mp4 ${d2.toFixed(2)} s`;
+      }
+      /* Afspilning uden musik-ur gennem et før-vindue mellem to stykker af
+         testklippet (videoklip før snittet: uret står lige før snittet i det tik,
+         hvor klippet skiftes): bagefter er B's element det aktive, med lyd og i
+         gang (B spillede stumt i vinduet). Spærrer browseren afspilning, springes
+         trinnet over. */
+      const keepMus=S.music;S.music=null;
+      S.clips=[{...vT,in:0,out:0.9},{...vT,id:uid(),in:1.1,out:2,trans:{id:'kryds',look:'kryds',at:'foer',curve:'lineær',dur:0.3,seam:'auto'}}];renderTL();
+      seekTo(0.3);await sleep(300);play();
+      const lim=performance.now()+4000;while(performance.now()<lim&&!(S.t>=1.3))await sleep(30);
+      const ran=S.t>=1.3,ps={aktiv:vActive._cid===S.clips[1].id,stum:vActive.muted,pause:vActive.paused};
+      pause();S.music=keepMus;
+      log('afspilning gennem før-vinduet',ran?JSON.stringify(ps):'sprunget over');
+      if(ran&&(!ps.aktiv||ps.stum||ps.pause))throw new Error('efter et før-vindue er testklippets element ikke aktivt med lyd: '+JSON.stringify(ps));
+      S.clips=JSON.parse(keep);renderTL();
+      mktxt+=` · overgange: ${Object.keys(OVG_LOOKS).length} looks${ovmp4}`;
     }
     log('DONE ✅');
     stBadge(`SELVTEST OK — ${S.clips.length} klip · ${S.texts.length} tekst · ${S.subs.length} undertekst · ${mp4txt}${m4txt}${mktxt} · 0,5×: ${rateTxt.join(', ')}`,true);

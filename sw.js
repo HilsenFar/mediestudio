@@ -1,15 +1,16 @@
 /* MedieStudio service worker — app-skallen i cache, så appen virker offline.
    Navigationer (index.html) hentes net-først: en ny version når ud uden at
    VERSION skal bumpes, og cachen er kun reserve når nettet er væk.
-   Øvrige filer (css, ikoner, fonte, mp4-muxer) er cache-først.
+   Øvrige filer (css, ikoner, fonte, mp4-muxer, overgange) er cache-først.
    Registreres IKKE når appen serveres lokalt (fx fra GenStudio på :8340). */
-const VERSION = 'mediestudio-v8';
+const VERSION = 'mediestudio-v9';
 const SHELL = [
   './',
   './index.html',
   './ds.css',
   './icons.svg',
   './mp4-muxer.min.js',
+  './overgange.js',
   './manifest.webmanifest',
   './favicon.png',
   './icon-192.png',
